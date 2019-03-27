@@ -44,19 +44,19 @@ def beta_binomial_loglikelihood(params, Ns, Ks):
     beta = params[1]
 
     ML = 0
-    ML = ML + reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + 1])
-    ML = ML - reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + 1])
-    ML = ML - reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + 1])
+    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + 1])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + 1])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + 1])
     
-    ML = ML - reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + alpha + beta])
-    ML = ML + reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + alpha])
-    ML = ML + reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + beta])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + alpha + beta])
+    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + alpha])
+    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + beta])
 
-    ML = ML + len(Ns) * (math.lgamma(alpha + beta) - math.lgamma(alpha) - math.lgamma(beta))
+    ML += len(Ns) * (math.lgamma(alpha + beta) - math.lgamma(alpha) - math.lgamma(beta))
 
 
     # Here, we set the penalty term of alpha and beta (0.5 is slightly arbitray...)
-    ML = ML - 0.5 * math.log(alpha + beta)
+    ML -= 0.5 * math.log(alpha + beta)
     return -ML
 
  
