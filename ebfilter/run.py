@@ -94,12 +94,18 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
 
     pon_count = sum(1 for line in open(pon_list, 'r'))
 
-    ##########
-    # generate pileup files
     # --> process_anno
+    if is_loption:
+        make_region_list(mut_file) # in utils
+
+    # generate pileup files
     anno2pileup(mut_file, f"{output_path}.target.pileup", tumor_bam, region)
     anno2pileup(mut_file, f"{output_path}.control.pileup", pon_list, region)
     ##########
+
+    # delete region_list.bed
+    if is_loption and not debug_mode:
+        subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
 
     ##########
     # load pileup files
