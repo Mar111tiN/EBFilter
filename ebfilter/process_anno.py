@@ -71,7 +71,7 @@ def anno2pileup(anno_path, out_path, bam_or_pon, region):
         # get lines of anno file
         for line in file_in:
             fields = line.rstrip('\n').split('\t')
-            loc = fields[1] - (fields[4] == "-") # -1 if fields 4 == '-' eg. deletion
+            loc = int(fields[1]) - (fields[4] == "-") # -1 if fields 4 == '-' eg. deletion
             mutReg = f"{fields[0]}:{loc}-{loc}"
     
             # set region for mpileup
@@ -82,7 +82,7 @@ def anno2pileup(anno_path, out_path, bam_or_pon, region):
         mpileup_cmd += [bam_or_pon]
     else:
         mpileup_cmd += ["-b", bam_or_pon]
-
+    mpileup_cmd = [str(command) for command in mpileup_cmd]
     subprocess.check_call(mpileup_cmd, stdout=file_out, stderr=FNULL) # maybe logging
     # delete region_list
     if is_loption:

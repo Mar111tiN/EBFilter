@@ -96,7 +96,7 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
 
     ##########
     # generate pileup files
-    # --> process_anno 
+    # --> process_anno
     anno2pileup(mut_file, f"{output_path}.target.pileup", tumor_bam, region)
     anno2pileup(mut_file, f"{output_path}.control.pileup", pon_list, region)
     ##########
@@ -190,11 +190,11 @@ def main(args):
     tumor_bam = args['tumor_bam']
     pon_list = args['pon_list']
     output_path = args['output_path']
-    is_anno = not(os.path.splitext(test)[-1] == '.vcf')
+    is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
     region = args['region']
 
     # file existence check
-   validate(mut_file, tumor_bam, pon_list) 
+    validate(mut_file, tumor_bam, pon_list) 
     if threads == 1:
         # non multi-threading mode
         if is_anno:

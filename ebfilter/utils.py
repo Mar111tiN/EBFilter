@@ -18,30 +18,30 @@ def validate_region(region):
             return True
 
 def validate(mut_file, tumor_bam, pon_list):
-# file existence check
-if not os.path.exists(mut_file):
-    sys.stderr.write(f"No target mutation file: {mut_file}")
-    sys.exit(1)
+    # file existence check
+    if not os.path.exists(mut_file):
+        sys.stderr.write(f"No target mutation file: {mut_file}")
+        sys.exit(1)
 
-if not os.path.exists(tumor_bam):
-    sys.stderr.write(f"No target bam file: {tumor_bam}")
-    sys.exit(1)
+    if not os.path.exists(tumor_bam):
+        sys.stderr.write(f"No target bam file: {tumor_bam}")
+        sys.exit(1)
 
-if not os.path.exists(tumor_bam + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", tumor_bam)):
-    sys.stderr.write(f"No index for target bam file: {tumor_bam}")
-    sys.exit(1)
+    if not os.path.exists(tumor_bam + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", tumor_bam)):
+        sys.stderr.write(f"No index for target bam file: {tumor_bam}")
+        sys.exit(1)
 
 
-if not os.path.exists(pon_list):
-    sys.stderr.write(f"No control list file: {pon_list}")
-    sys.exit(1)
+    if not os.path.exists(pon_list):
+        sys.stderr.write(f"No control list file: {pon_list}")
+        sys.exit(1)
 
-with open(pon_list) as hIN:
-    for file in hIN:
-        file = file.rstrip()
-        if not os.path.exists(file):
-            sys.stderr.write(f"No control bam file: {file}")
-            sys.exit(1)
-        if not os.path.exists(file + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", file)):
-            sys.stderr.write(f"No index for control bam file: {file}"
-            sys.exit(1)
+    with open(pon_list) as hIN:
+        for file in hIN:
+            file = file.rstrip()
+            if not os.path.exists(file):
+                sys.stderr.write(f"No control bam file: {file}")
+                sys.exit(1)
+            if not os.path.exists(file + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", file)):
+                sys.stderr.write(f"No index for control bam file: {file}")
+                sys.exit(1)
