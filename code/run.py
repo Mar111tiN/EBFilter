@@ -99,8 +99,8 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
         make_region_list(mut_file) # in utils
 
     # generate pileup files
-    anno2pileup(mut_file, f"{output_path}.target.pileup", tumor_bam, region)
-    anno2pileup(mut_file, f"{output_path}.control.pileup", pon_list, region)
+    anno2pileup(mut_file, output_path, tumor_bam, region)
+    anno2pileup(mut_file, output_path, pon_list, region)
     ##########
 
     # delete region_list.bed
@@ -112,20 +112,24 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
     pos2pileup_target = {}
     pos2pileup_control = {}
 
-    with open(output_path + '.target.pileup') as file_out:
-        for line in file_out
+    with open(f"{output_path}.target.pileup", 'r') as file_in:
+        for line in file_in:
             field = line.rstrip('\n').split('\t')
             pos2pileup_target[field[0] + '\t' + field[1]] = '\t'.join(field[3:])
 
-    with open(output_path + '.control.pileup') as file_out:
-        for line in file_out
+    with open(f"{output_path}.control.pileup", 'r') as file_in:
+        for line in file_in:
             field = line.rstrip('\n').split('\t')
             pos2pileup_control[field[0] + '\t' + field[1]] = '\t'.join(field[3:])
     ##########
 
-    ##########
+     ##########
     # get restricted region if not None
     if is_loption and region:
+        region_match = region_exp.match(region)
+        reg_chr = region_match.group(1)
+        reg_start = int(region_match.group(2))
+        reg_end = int(region_match.group(3))
 
     ##########
 
@@ -215,12 +219,14 @@ def main(args):
 
         if is_anno:
             # partition anno files
-            partition_anno(mut_file, output_path + ".tmp.input.anno.", threads)
+            partition_anno(mut_file, output_path, threads)
 
             jobs = []
+
             for i in range(threads):
-                process = multiprocessing.Process(target = EBFilter_worker_anno, args = \
-                    (output_path + ".tmp.input.anno." + str(i), tumor_bam, pon_list, output_path + "." + str(i), region))
+                worker_args = (f"{output_path}.{i}", tumor_bam, pon_list, f"{output_path}.{i}", region)
+                process = multiprocessing.Process(target=EBFilter_worker_anno, args=worker_args)
+                    
                 jobs.append(process)
                 process.start()
         
@@ -229,22 +235,21 @@ def main(args):
                 jobs[i].join()
         
             # merge the individual results
-            merge_anno(output_path + ".", output_path, threads)
+            merge_anno(output_path, threads)
         
             # delete intermediate files
             if debug_mode == False:
                 for i in range(threads):
-                    subprocess.check_call(["rm", output_path + ".tmp.input.anno." + str(i)])
-                    subprocess.check_call(["rm", output_path + "." + str(i)])
+                    subprocess.check_call(["rm", f"{output_path}.{i}", f"{output_path}.{i}.control.pileup", f"{output_path}.{i}.target.pileup"])
 
         else:
             # partition vcf files
-            process_vcf.partition_vcf(mut_file, output_path + ".tmp.input.vcf.", threads)
+            process_vcf.partition_vcf(mut_file, f"{output_path}.sub.vcf", threads)
 
             jobs = []
             for i in range(threads):
                 process = multiprocessing.Process(target = EBFilter_worker_vcf, args = \
-                    (output_path + ".tmp.input.vcf." + str(i), tumor_bam, pon_list, output_path + "." + str(i), region))
+                    (output_path + ".sub.vcf." + str(i), tumor_bam, pon_list, output_path + "." + str(i), region))
                 jobs.append(process)
                 process.start()
 
@@ -258,7 +263,7 @@ def main(args):
             # delete intermediate files
             if debug_mode == False:
                 for i in range(threads):
-                    subprocess.check_call(["rm", output_path + ".tmp.input.vcf." + str(i)])
+                    subprocess.check_call(["rm", output_path + ".sub.vcf." + str(i)])
                     subprocess.check_call(["rm", output_path + "." + str(i)])
 
 
