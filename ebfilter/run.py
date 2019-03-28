@@ -169,6 +169,7 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
         subprocess.check_call(["rm", output_path + '.target.pileup'])
         subprocess.check_call(["rm", output_path + '.control.pileup'])
 
+
 ############ STATE ########################
 debug_mode = True
 params = config['EB']['params']
@@ -179,6 +180,7 @@ _q = str(params['map_quality'])  # 20
 _Q = str(params['base_quality'])
 _ff = params['filter_flags'] # 'UNMAP,SECONDARY,QCFAIL,DUP'
 is_loption = params['loption'] # False
+
 
 def main(args):
     '''
