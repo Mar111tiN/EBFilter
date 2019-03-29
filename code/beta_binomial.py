@@ -1,8 +1,10 @@
-#! /usr/bin/env python
+def fisher_combination(pvalues):
 
-import math
-import numpy
-import scipy.optimize
+    if 0 in pvalues:
+        return 0
+    else:
+        return 1 - scipy.stats.chi2.cdf(sum([-2 * math.log(x) for x in pvalues]), 2 * len(pvalues))
+
 
 def beta_binomial_density(params, n, k):
 

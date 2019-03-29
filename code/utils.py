@@ -10,7 +10,7 @@ def validate_region(region):
     '''
     returns True if region 
     '''
-    region_exp = re.compile('^[^ \t\n\r\f\v,]+:\d+\-\d+')
+    region_simple = re.compile('^[^ \t\n\r\f\v,]+:\d+\-\d+')
     # region format check
     if region:
         region_match = region_exp.match(region)

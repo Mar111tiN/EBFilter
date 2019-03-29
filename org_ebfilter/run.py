@@ -130,16 +130,16 @@ def EBFilter_worker_anno(targetMutationFile, targetBamPath, controlBamPathList, 
 
     for line in hIN:
 
-        F = line.rstrip('\n').split('\t')
-        chr, pos, pos2, ref, alt = F[0], F[1], F[2], F[3], F[4]
+        field = line.rstrip('\n').split('\t')
+        chr, pos, pos2, ref, alt = field[0], field[1], field[2], field[3], field[4]
         if alt == "-": pos = str(int(pos) - 1)
 
         if is_loption == True and region != "":
             if reg_chr != chr: continue
             if int(pos) < reg_start or int(pos) > reg_end: continue
 
-        F_target = pos2pileup_target[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_target else []
-        F_control = pos2pileup_control[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_control else [] 
+        field_target = pos2pileup_target[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_target else []
+        field_control = pos2pileup_control[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_control else [] 
 
         var = ""
         if ref != "-" and alt != "-":
@@ -152,7 +152,7 @@ def EBFilter_worker_anno(targetMutationFile, targetBamPath, controlBamPathList, 
 
         EB_score = "." # if the variant is complex, we ignore that
         if not var == "":
-            EB_score = get_eb_score.get_eb_score(var, F_target, F_control, base_qual_thres, controlFileNum)
+            EB_score = get_eb_score.get_eb_score(var, field_target, field_control, base_qual_thres, controlFileNum)
 
         # add the score and write the vcf record
         print >> hOUT, '\t'.join(F + [str(EB_score)])

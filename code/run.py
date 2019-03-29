@@ -108,19 +108,19 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
         subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
 
     ##########
-    # load pileup files
+    # load pileup files into dictionaries pos2pileup_target['chr1:123453'] = "depth \t reads \t rQ"
     pos2pileup_target = {}
     pos2pileup_control = {}
-
+ 
     with open(f"{output_path}.target.pileup", 'r') as file_in:
         for line in file_in:
             field = line.rstrip('\n').split('\t')
-            pos2pileup_target[field[0] + '\t' + field[1]] = '\t'.join(field[3:])
+            pos2pileup_target[f"{field[0]}:{field[1]}"] = '\t'.join(field[3:])
 
     with open(f"{output_path}.control.pileup", 'r') as file_in:
         for line in file_in:
             field = line.rstrip('\n').split('\t')
-            pos2pileup_control[field[0] + '\t' + field[1]] = '\t'.join(field[3:])
+            pos2pileup_control[f"{field[0]}:{field[1]}"] = '\t'.join(field[3:])
     ##########
 
      ##########
@@ -140,23 +140,25 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
 
                 field = line.rstrip('\n').split('\t')
                 chr, pos, pos2, ref, alt = field[0], field[1], field[2], field[3], field[4]
+                # adjust pos for deletion
                 if alt == "-":
                     pos -= 1
 
                 if is_loption and region:
-                    region_exp = re.compile('^([^ \t\n\r\f\v,]+):(\d+)\-(\d+)')
-                    region_match = region_exp.match(region)
-                    reg_chr = region_match.group(1)
-                    reg_start = int(region_match.group(2))
-                    reg_end = int(region_match.group(3))
                     if reg_chr != chr:
                         continue
-                    if pos < reg_start or pos > reg_end:
+                    if (int(pos) < reg_start) or (int(pos) > reg_end):
                         continue
 
-                F_target = pos2pileup_target[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_target else []
-                F_control = pos2pileup_control[chr + '\t' + pos].split('\t') if chr + '\t' + pos in pos2pileup_control else [] 
+                # pileup dicts are read into field_target as arrays
+                field_target = pos2pileup_target[f"{chr}:{pos}"].split('\t') if f"{chr}:{pos}" in pos2pileup_target else []
+                field_control = pos2pileup_control[f"{chr}:{pos}"].split('\t') if f"{chr}:{pos}" in pos2pileup_control else [] 
 
+                # set the variance
+                # ref   alt    var
+                #  A     T      T
+                #  -     T      +T
+                #  A     -      -A
                 var = ""
                 if ref != "-" and alt != "-":
                     var = alt
@@ -171,7 +173,7 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
                     EB_score = get_eb_score(var, F_target, F_control, pon_count)
 
                 # add the score and write the vcf record
-                print('\t'.join(F + [str(EB_score)], file=file_out)
+                print('\t'.join(F + [str(EB_score)]), file=file_out)
 
 
     # delete intermediate files
@@ -180,7 +182,7 @@ def EBFilter_worker_anno(mut_file, tumor_bam, pon_list, output_path, region):
         subprocess.check_call(["rm", output_path + '.control.pileup'])
 
 
-############ STATE ########################
+############ GLOBAL STATE ########################
 debug_mode = True
 params = config['EB']['params']
 threads = config['EB']['threads']
@@ -188,9 +190,12 @@ threads = config['EB']['threads']
 _q = str(params['map_quality'])  # 20
 # base quality
 _Q = str(params['base_quality'])
+filter_quals = ''
+for qual in range( 33, 33 + _Q ):
+    filter_quals += chr(qual)
+
 _ff = params['filter_flags'] # 'UNMAP,SECONDARY,QCFAIL,DUP'
 is_loption = params['loption'] # False
-
 
 def main(args):
     '''
