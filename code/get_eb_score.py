@@ -1,10 +1,3 @@
-#! /usr/bin/env python
-
-import control_count
-import beta_binomial
-import utils
-import math, numpy
-
 def get_eb_score(var, F_target, F_control, pon_count):
     """
     calculate the EBCall score from pileup bases of tumor and control samples
@@ -33,8 +26,8 @@ def get_eb_score(var, F_target, F_control, pon_count):
         vars_control_p[i], depth_control_p[i], vars_control_n[i], depth_control_n[i] = var_count_check(var, *F_control[3*i:3*i+3], True)
 
     # estimate the beta-binomial parameters for positive and negative strands
-    alpha_p, beta_p = fit_beta_binomial(numpy.array(depth_control_p), numpy.array(vars_control_p))
-    alpha_n, beta_n = fit_beta_binomial(numpy.array(depth_control_n), numpy.array(vars_control_n))
+    alpha_p, beta_p = fit_beta_binomial(np.array(depth_control_p), np.array(vars_control_p))
+    alpha_n, beta_n = fit_beta_binomial(np.array(depth_control_n), np.array(vars_control_n))
 
     # evaluate the p-values of target mismatch numbers for positive and negative strands
     pvalue_p = beta_binom_pvalue([alpha_p, beta_p], depth_target_p, vars_target_p)

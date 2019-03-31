@@ -31,28 +31,25 @@ def beta_binom_pvalue(params, n, k):
 
 def beta_binomial_loglikelihood(params, Ns, Ks):
 
-    """Calculating log-likelihood of beta-binomial distribution
-
+    """
+    Calculating log-likelihood of beta-binomial distribution
     Args:
-        params (List[float]): the parameter of beta distribution ([alpha, beta])
-    
-        As (numpy.array([int])): the counts for success
-        
+        params (List[float]): the parameter of beta distribution ([alpha, beta])  
+        As (numpy.array([int])): the counts for success      
         Bs (numpy.array([int])): the counts of trials
-
     """
 
     alpha = params[0]    
     beta = params[1]
 
     ML = 0
-    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + 1])
-    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + 1])
-    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + 1])
+    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + 1])
+    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + 1])
+    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + 1])
     
-    ML -= reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns + alpha + beta])
-    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ks + alpha])
-    ML += reduce(lambda a, b: a + math.lgamma(b), numpy.r_[0, Ns - Ks + beta])
+    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + alpha + beta])
+    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + alpha])
+    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + beta])
 
     ML += len(Ns) * (math.lgamma(alpha + beta) - math.lgamma(alpha) - math.lgamma(beta))
 
@@ -65,15 +62,12 @@ def beta_binomial_loglikelihood(params, Ns, Ks):
 
 def fit_beta_binomial(As, Bs):
 
-    """Obtaining maximum likelihood estimator of beta-binomial distribution
-
-    Args:
-        As (numpy.array([int])): the counts for success
-        
-        Bs (numpy.array([int])): the counts of trials
-
     """
-
+    Obtaining maximum likelihood estimator of beta-binomial distribution
+    Args:
+        As (numpy.array([int])): the counts for success      
+        Bs (numpy.array([int])): the counts of trials
+    """
     result = scipy.optimize.fmin_l_bfgs_b(beta_binomial_loglikelihood,
                                           [20, 20],
                                           args = (As, Bs),
@@ -81,7 +75,3 @@ def fit_beta_binomial(As, Bs):
                                           bounds = [(0.1, 10000000), (1, 10000000)])
 
     return result[0]
-
-
-
-
