@@ -1,8 +1,12 @@
+import os
+import sys
+import re
+
 def validate_region(region):
     '''
     returns True if region 
     '''
-    region_simple = re.compile('^[^ \t\n\r\f\v,]+:\d+\-\d+')
+    region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
     # region format check
     if region:
         region_match = region_exp.match(region)
@@ -19,10 +23,9 @@ def validate(mut_file, tumor_bam, pon_list):
         sys.stderr.write(f"No target bam file: {tumor_bam}")
         sys.exit(1)
 
-    if not os.path.exists(tumor_bam + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", tumor_bam)):
+    if not os.path.exists(tumor_bam + ".bai") and not os.path.exists(os.path.splitext(tumor_bam)[0] + '.bai'):
         sys.stderr.write(f"No index for target bam file: {tumor_bam}")
         sys.exit(1)
-
 
     if not os.path.exists(pon_list):
         sys.stderr.write(f"No control list file: {pon_list}")
@@ -34,9 +37,10 @@ def validate(mut_file, tumor_bam, pon_list):
             if not os.path.exists(file):
                 sys.stderr.write(f"No control bam file: {file}")
                 sys.exit(1)
-            if not os.path.exists(file + ".bai") and not os.path.exists(re.sub(r'bam$', "bai", file)):
+            if not os.path.exists(file + ".bai") and not os.path.exists(os.path.splitext(file)[0] + '.bai'):
                 sys.stderr.write(f"No index for control bam file: {file}")
                 sys.exit(1)
+
 
 def make_region_list(anno_path):
     # make bed file for mpileup

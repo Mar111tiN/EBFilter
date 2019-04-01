@@ -1,9 +1,18 @@
+import math
+import scipy.optimize
+from scipy.stats import chi2
+from scipy import optimize
+import re
+from functools import reduce
+
+
+
 def fisher_combination(pvalues):
 
     if 0 in pvalues:
         return 0
     else:
-        return 1 - scipy.stats.chi2.cdf(sum([-2 * math.log(x) for x in pvalues]), 2 * len(pvalues))
+        return 1 - chi2.cdf(sum([-2 * math.log(x) for x in pvalues]), 2 * len(pvalues))
 
 
 def beta_binomial_density(params, n, k):
@@ -43,13 +52,13 @@ def beta_binomial_loglikelihood(params, Ns, Ks):
     beta = params[1]
 
     ML = 0
-    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + 1])
-    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + 1])
-    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + 1])
+    ML += reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + 1])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + 1])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + 1])
     
-    ML -= functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + alpha + beta])
-    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + alpha])
-    ML += functools.reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + beta])
+    ML -= reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns + alpha + beta])
+    ML += reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ks + alpha])
+    ML += reduce(lambda a, b: a + math.lgamma(b), np.r_[0, Ns - Ks + beta])
 
     ML += len(Ns) * (math.lgamma(alpha + beta) - math.lgamma(alpha) - math.lgamma(beta))
 
@@ -68,7 +77,7 @@ def fit_beta_binomial(As, Bs):
         As (numpy.array([int])): the counts for success      
         Bs (numpy.array([int])): the counts of trials
     """
-    result = scipy.optimize.fmin_l_bfgs_b(beta_binomial_loglikelihood,
+    result = optimize.fmin_l_bfgs_b(beta_binomial_loglikelihood,
                                           [20, 20],
                                           args = (As, Bs),
                                           approx_grad = True,
