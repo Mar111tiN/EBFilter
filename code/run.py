@@ -12,7 +12,8 @@ from . import anno
 from . import vcf
 
 
-def main(args,state):
+
+def main(args, state):
     '''
     validates files and refers to respective functions
     '''
@@ -24,6 +25,8 @@ def main(args,state):
     output_path = args['output_path']
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
     region = args['region']
+    threads = state['threads']
+    debug_mode = state['debug_mode']
     # create log directory - remove in snakemake
     log_folder = os.path.split(state['log'])[0]
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):
@@ -32,12 +35,17 @@ def main(args,state):
 
     # file existence check for files and bams in pon_list
     validate(mut_file, tumor_bam, pon_list) 
-    if state['threads'] == 1:
+    if threads == 1:
         # non multi-threading mode
         if is_anno:
             anno.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
         else: 
             vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
+            # delete intermediate files
+        if not state['debug_mode']:
+            subprocess.check_call(["rm", output_path + '.target.pileup'])
+            subprocess.check_call(["rm", output_path + '.control.pileup'])
+            subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
     else:
         # multi-threading mode
         ##########
@@ -47,7 +55,7 @@ def main(args,state):
             jobs = []
             for i in range(threads):
                 worker_args = (f"{output_path}.{i}", tumor_bam, pon_list, f"{output_path}.sub.{i}", region, state)
-                process = multiprocessing.Process(target=EBFilter_worker_anno, args=worker_args)                    
+                process = multiprocessing.Process(target=anno.worker, args=worker_args)                    
                 jobs.append(process)
                 process.start()       
             # wait all the jobs to be done
@@ -58,8 +66,11 @@ def main(args,state):
             # delete intermediate files
             if not debug_mode:
                 for i in range(threads):
-                    print('delete')
-                    subprocess.check_call(["rm", f"{output_path}.{i}", f"{output_path}.{i}.control.pileup", f"{output_path}.{i}.target.pileup"])
+                    rm_list = [f"{output_path}.{i}"]
+                    rm_list += [f"{output_path}.sub.{i}"]
+                    rm_list += [f"{output_path}.sub.{i}.control.pileup", f"{output_path}.sub.{i}.target.pileup"]
+                    rm_list += [f"{output_path}.{i}.region_list.bed"]
+                    subprocess.check_call(["rm", *rm_list])
 
         else:
             # partition vcf files

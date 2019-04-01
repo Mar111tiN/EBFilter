@@ -12,12 +12,6 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
     anno2pileup(mut_file, output_path, tumor_bam, region,state)
     anno2pileup(mut_file, output_path, pon_list, region,state)
     ##########
-
-    # delete region_list.bed
-    if not state['debug_mode']:
-        subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
-
-    ##########
     # load pileup files into dictionaries pos2pileup_target['chr1:123453'] = "depth \t reads \t rQ"
     pos2pileup_target = {}
     pos2pileup_control = {}
@@ -82,13 +76,6 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
                 
                 # add the score and write the vcf record
                 print('\t'.join(field + [str(EB_score)]), file=file_out)
-            
-
-    # delete intermediate files
-    if not state['debug_mode']:
-        subprocess.check_call(["rm", output_path + '.target.pileup'])
-        subprocess.check_call(["rm", output_path + '.control.pileup'])
-
 
 def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
     '''
