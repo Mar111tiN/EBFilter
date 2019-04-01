@@ -2,18 +2,19 @@ import os
 import subprocess
 from .utils import make_region_list
 import re
+from .eb import get_eb_score
 
-def worker(mut_file, tumor_bam, pon_list, output_path, region, _):
+def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
 
     pon_count = sum(1 for line in open(pon_list, 'r'))
 
     # generate pileup files
-    anno2pileup(mut_file, output_path, tumor_bam, region, _)
-    anno2pileup(mut_file, output_path, pon_list, region, _)
+    anno2pileup(mut_file, output_path, tumor_bam, region,state)
+    anno2pileup(mut_file, output_path, pon_list, region,state)
     ##########
 
     # delete region_list.bed
-    if not _['debug_mode']:
+    if not state['debug_mode']:
         subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
 
     ##########
@@ -76,7 +77,7 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region, _):
                 EB_score = "." # if the variant is complex, we ignore that
                 if var:
                     # get_eb_score('+A', [depth, reads, rQ], [depth1, reads1, rQ1, depth2, reads2, rQ2, depth3, reads3, rQ3], 3, state)
-                    EB_score = get_eb_score(var, field_target, field_control, pon_count)
+                    EB_score = get_eb_score(var, field_target, field_control, pon_count, state['filter_quals'])
                 
                 
                 # add the score and write the vcf record
@@ -84,12 +85,12 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region, _):
             
 
     # delete intermediate files
-    if not _['debug_mode']:
+    if not state['debug_mode']:
         subprocess.check_call(["rm", output_path + '.target.pileup'])
         subprocess.check_call(["rm", output_path + '.control.pileup'])
 
 
-def anno2pileup(mut_file, out_path, bam_or_pon, region, _):
+def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
     '''
     creates a pileup from all the entries in the anno file
     --> out_path.target.pileup
@@ -97,7 +98,7 @@ def anno2pileup(mut_file, out_path, bam_or_pon, region, _):
     '''
     # make region list for use in l_option of mpileup
     make_region_list(mut_file) # in utils --> mut_file.region_list.bed
-    with open(log_file, 'w') as log:
+    with open(state['log'], 'w') as log:
         with open(mut_file, 'r') as file_in:
             # determine wether it is bam or pon
             is_bam = (os.path.splitext(bam_or_pon)[-1] == '.bam')
@@ -106,7 +107,7 @@ def anno2pileup(mut_file, out_path, bam_or_pon, region, _):
             else:
                 out_file = f"{out_path}.control.pileup"
             with open(out_file, 'w') as file_out:
-                mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", _['q'], "-Q", _['Q'], "--ff", _['ff'], "-l", f"{mut_file}.region_list.bed"]
+                mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q",state['q'], "-Q",state['Q'], "--ff",state['ff'], "-l", f"{mut_file}.region_list.bed"]
 
                 # add tumor_bam or pon_list of bam files depending on file extension of bam_or_pon
                 if is_bam:

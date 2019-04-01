@@ -2,6 +2,7 @@ import math
 import scipy.optimize
 from scipy.stats import chi2
 from scipy import optimize
+import numpy as np
 import re
 from functools import reduce
 
