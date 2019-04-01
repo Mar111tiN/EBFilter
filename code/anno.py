@@ -103,7 +103,12 @@ def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
                     mpileup_cmd += ["-b", bam_or_pon]
                 if region:
                     mpileup_cmd = mpileup_cmd + ["-r", region]
-                subprocess.check_call([str(command) for command in mpileup_cmd], stdout=file_out, stderr=log) # maybe logging
+                # use sed to directly remove the $ and ^] signs
+                samtools = subprocess.Popen([str(command) for command in mpileup_cmd], stdout=subprocess.PIPE, stderr=log)
+                sed_cmd = ['sed', '-E', 's/\^\]|\$//g']
+                sed = subprocess.Popen(sed_cmd, stdin=samtools.stdout, stdout=file_out)
+                samtools.stdout.close()
+                success = sed.communicate()
 
 
 def partition(anno_path, out_path, threads):
