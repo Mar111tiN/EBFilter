@@ -44,6 +44,13 @@ def validate(mut_file, tumor_bam, pon_list):
 
 def make_region_list(anno_path):
     # make bed file for mpileup
+    # with a pandas dataframe
+    # better to open the original file as pandas in this function 
+    # mut_pd = pd.read_csv(annopath)
+    # mut_pd[1] = mut_pd[1] - 1 - (mut_pd[3] == '-')
+    # mut_pd[2] = mut_pd[2] - (mut_pd[3] == '-')
+    # mut_pd[selected columns].to_csv(f"{anno_path}.region_list.bed", sep='\t')
+
     out_path = f"{anno_path}.region_list.bed"
     with open(anno_path) as file_in:
         with open(out_path, 'w') as file_out:

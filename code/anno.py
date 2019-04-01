@@ -8,6 +8,8 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
 
     pon_count = sum(1 for line in open(pon_list, 'r'))
 
+    ########### PANDAS IMPORT ################
+    # mut_pd = pd.read_csv(mutfile, sep=',')
     # generate pileup files
     anno2pileup(mut_file, output_path, tumor_bam, region,state)
     anno2pileup(mut_file, output_path, pon_list, region,state)
@@ -37,6 +39,9 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
 
     ##########
 
+    ############ EB score with pandas ############
+    # mut_pd['EB_score'] = mut_pd.apply(EB_score, axis=1)
+ 
     with open(mut_file, 'r') as file_in:
         with open(output_path, 'w') as file_out:
             for line in file_in:
