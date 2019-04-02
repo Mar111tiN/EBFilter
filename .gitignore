@@ -2,3 +2,5 @@
 output
 .ipynb_checkpoints
 testinput
+test
+__pycache__

@@ -50,11 +50,13 @@ def make_region_list(anno_path):
     # mut_pd[1] = mut_pd[1] - 1 - (mut_pd[3] == '-')
     # mut_pd[2] = mut_pd[2] - (mut_pd[3] == '-')
     # mut_pd[selected columns].to_csv(f"{anno_path}.region_list.bed", sep='\t')
-
     out_path = f"{anno_path}.region_list.bed"
     with open(anno_path) as file_in:
         with open(out_path, 'w') as file_out:
             for line in file_in:
                 field = line.rstrip('\n').split('\t')
+                # fix for files with header
+                if field[0] == 'Chr':
+                    continue
                 loc = int(field[1]) - (field[4] == "-")  # -1 if field 4 == '-' eg. deletion 
                 print(field[0], (loc - 1), loc, file=file_out, sep='\t')

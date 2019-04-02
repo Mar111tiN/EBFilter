@@ -50,6 +50,7 @@ def varCountCheck(var, depth, baseBar, qualBar, base_qual_thres, verbose):
                 var_match = True
         elif var[1:].upper() == varChar.upper():
             var_match = True
+        print('varmatch', var_match)
 
 
         strand = '+' if varChar.isupper() else '-'

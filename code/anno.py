@@ -21,6 +21,7 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
     with open(f"{output_path}.target.pileup", 'r') as file_in:
         for line in file_in:
             field = line.rstrip('\n').split('\t')
+            # store all but the first 3 colummns
             pos2pileup_target[f"{field[0]}:{field[1]}"] = '\t'.join(field[3:])
 
     with open(f"{output_path}.control.pileup", 'r') as file_in:
@@ -46,7 +47,10 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
         with open(output_path, 'w') as file_out:
             for line in file_in:
                 field = line.rstrip('\n').split('\t')
-                chr, pos, pos2, ref, alt = field[0], field[1], field[2], field[3], field[4]
+                # header alarm
+                if field[0] == 'Chr':
+                    continue
+                chr, pos, pos2, ref, alt = field[0], int(field[1]), field[2], field[3], field[4]
                 # adjust pos for deletion
                 if alt == "-":
                     pos -= 1
@@ -108,12 +112,14 @@ def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
                     mpileup_cmd += ["-b", bam_or_pon]
                 if region:
                     mpileup_cmd = mpileup_cmd + ["-r", region]
-                # use sed to directly remove the $ and ^] signs
-                samtools = subprocess.Popen([str(command) for command in mpileup_cmd], stdout=subprocess.PIPE, stderr=log)
-                sed_cmd = ['sed', '-E', 's/\^\]|\$//g']
-                sed = subprocess.Popen(sed_cmd, stdin=samtools.stdout, stdout=file_out)
-                samtools.stdout.close()
-                success = sed.communicate()
+                subprocess.check_call([str(command) for command in mpileup_cmd], stdout=file_out, stderr=log)
+
+            # direct sed to directly remove the $ and ^] signs seems to break certain things in the quality
+                # samtools = subprocess.Popen([str(command) for command in mpileup_cmd], stdout=subprocess.PIPE, stderr=log)
+                # sed_cmd = ['sed', '-E', 's/\^\]|\$//g'] # maybe this breaks the whole thing
+                # sed = subprocess.Popen(sed_cmd, stdin=samtools.stdout, stdout=file_out)
+                # samtools.stdout.close()
+                # success = sed.communicate()
 
 
 def partition(anno_path, out_path, threads):
