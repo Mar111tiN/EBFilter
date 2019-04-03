@@ -48,8 +48,6 @@ def beta_binomial_loglikelihood(params, Ns, Ks, var):
         As (numpy.array([int])): the counts for success      
         Bs (numpy.array([int])): the counts of trials
     """
-    print(var, np.r_[0, Ns - Ks + 1])
-
 
     alpha = params[0]    
     beta = params[1]
@@ -80,8 +78,6 @@ def fit_beta_binomial(As, Bs, var):
         As (numpy.array([int])): the counts for success      
         Bs (numpy.array([int])): the counts of trials
     """
-    if var == '-T':
-        print(var, As, Bs)
     result = optimize.fmin_l_bfgs_b(beta_binomial_loglikelihood,
                                           [20, 20],
                                           args = (As, Bs, var),

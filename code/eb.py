@@ -6,8 +6,8 @@ from .beta_binomial import fit_beta_binomial, beta_binom_pvalue, fisher_combinat
 import numpy as np
 
 sign_re = re.compile(r'\^.|\$')
-region_exp = re.compile(r'^([^ \t\n\r\f\v,]+):(\d+)\-(\d+)')
-indel_re = re.compile(r'([\+\-])([0-9]+)([ACGTNacgtn]+)') # +23ATTTNNGC or -34TTCCAAG
+indel_simple = re.compile(r'[\+\-]([0-9]+)')
+region_exp = re.compile(r'^([^ \t\n\r\f\v,]+):([0-9]+)\-([0-9]+)')
 
 
 def var_count_check(var, depth, read, rQ, is_verbose, filter_quals):
@@ -19,64 +19,37 @@ def var_count_check(var, depth, read, rQ, is_verbose, filter_quals):
     # read = 'AAATTCCGGG^]ACGTA$CCT'
     # rQ = 'IIIIIIIFFCDDD'
     # delete the start and end signs
-    read = sign_re.sub('', read)
-    
+    print(read)
     if var[0].upper() not in "+-ATGCN":
             print(var + ": input var has wrong format!", file=sys.stderr)
             sys.exit(1)
-
     if depth == 0:
         return [0,0,0,0]
 
-    # init
-    ins_p = ins_n = del_p = del_n = 0
-    ins_vb_p = ins_vb_n = del_vb_p = del_vb_n = 0
+    # remove $ and ^] and ^I and so on
+    read = sign_re.sub('', read)
 
     #######################       INDELS   #########################################
-    #######################       ??????   #########################################
-    is_indel = False
-    while indel_re.search(read):
-        is_indel = True
-        m = indel_re.search(read)
-        site = m.start()
-        type = m.group(1)
-        indel_size = int(m.group(2))
-        varChar = m.group(3)[0:indel_size+1]
-        # checking if size of del is OK
-        var_match = False
-        if var[0] == "-":
-            if len(var[1:]) == len(varChar):
-                var_match = True
-        elif var[1:].upper() == varChar.upper():
-            var_match = True
+    if indel_simple.search(read):
+        if var[0] in "+-" :  # is indel
+            l = len(var) - 1
+        else:
+        # indels in reads that where not called
+            l = indel_simple.search(read).group(1)
+        re_string = r"([ACGTNacgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(l) + "})"
+        indel_re = re.compile(re_string)
+        read = indel_re.sub(r'\1', read)
 
-        # sum up the inserts and deletions for that site
-        if type == "+": # ins
-            if varChar.isupper():
-                ins_vb_p += 1
-                if var_match:
-                    ins_p += 1
-            else:
-                ins_vb_n += 1
-                if var_match:
-                    ins_n += 1
-        else:   # del
-            if varChar.isupper():
-                del_vb_p += 1
-                if var_match:
-                    del_p += 1
-            else:
-                del_vb_n += 1
-                if var_match:
-                    del_n += 1
-        read = read[:m.start()] + read[m.end()-1:]
-    if is_indel:
-        read = read[:-1]
+    
+        re_string = r"([ACGTNacgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(l) + "})"  # for exact length of insert
+        indel_re = re.compile(re_string)
+        read = indel_re.sub(r'\1', read)
+
 
 
     #############################################################################
     if len(read) != len(rQ):
-        print(f"{read}\n{rQ}", file=sys.stderr)
+        print(f"{read}\n{rQ}", var, file=sys.stderr)
         print("lengths of bases and qualities are different!", file=sys.stderr)
         sys.exit(1)
 
@@ -106,17 +79,10 @@ def var_count_check(var, depth, read, rQ, is_verbose, filter_quals):
     if var.upper() in "ACGT":
         mismatch_p = base_count[var.upper()]
         mismatch_n = base_count[var.lower()]    
-    else:
-        if var[0] == "+":
-            if is_verbose:
-                mismatch_p, mismatch_n = ins_vb_p, ins_vb_n
-            else:
-                mismatch_p, mismatch_n = ins_p, ins_n
-        elif var[0] == "-":
-            if is_verbose:
-                mismatch_p, mismatch_n = del_vb_p, del_vb_n
-            else:
-                mismatch_p, mismatch_n = del_p, del_n
+
+
+    ################## DEBUG ###########################################            
+    # print(f'var_count_check:\nvar {var}:{read}\nmismatch_p: {mismatch_p}\ndepth_p: {depth_p}\nmismatch_n: {mismatch_n}\ndepth_n: {depth_n}')
     return [mismatch_p, depth_p, mismatch_n, depth_n]
 
 
@@ -125,14 +91,16 @@ def get_eb_score(var, F_target, F_control, pon_count, filter_quals):
     """
     calculate the EBCall score from pileup bases of tumor and control samples
     """
-
     # var = '+A'
     # F_target = [depth, read, rQ]
     # F_control = [depth1, read1, rQ1, depth2, read2, rQ2, depth3, read3, rQ3]
     # pon_count = 3)
     # obtain the mismatch numbers and depths of target sequence data for positive and negative strands
+
+    print (F_target, F_control)
     if len(F_target) > 0:
         vars_target_p, depth_target_p, vars_target_n, depth_target_n = var_count_check(var, *F_target, False, filter_quals)
+
     else:
         vars_target_p = depth_target_p = vars_target_n = depth_target_n = 0
 
@@ -147,7 +115,8 @@ def get_eb_score(var, F_target, F_control, pon_count, filter_quals):
     for i in range(pon_count):
         vars_control_p[i], depth_control_p[i], vars_control_n[i], depth_control_n[i] = var_count_check(var, *F_control[3*i:3*i+3], True, filter_quals)
     # estimate the beta-binomial parameters for positive and negative strands
-    # print(var)
+    ################# Debugging #######################
+
     alpha_p, beta_p = fit_beta_binomial(np.array(depth_control_p), np.array(vars_control_p), var)  # var for debugging
     alpha_n, beta_n = fit_beta_binomial(np.array(depth_control_n), np.array(vars_control_n), var)
 

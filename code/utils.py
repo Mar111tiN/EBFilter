@@ -54,7 +54,7 @@ def make_region_list(anno_path):
     with open(anno_path) as file_in:
         with open(out_path, 'w') as file_out:
             for line in file_in:
-                field = line.rstrip('\n').split('\t')
+                field = line.rstrip('\n').split(',')
                 # fix for files with header
                 if field[0] == 'Chr':
                     continue

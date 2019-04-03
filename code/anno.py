@@ -46,7 +46,7 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
     with open(mut_file, 'r') as file_in:
         with open(output_path, 'w') as file_out:
             for line in file_in:
-                field = line.rstrip('\n').split('\t')
+                field = line.rstrip('\n').split(',')
                 # header alarm
                 if field[0] == 'Chr':
                     continue
