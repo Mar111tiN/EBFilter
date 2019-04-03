@@ -27,6 +27,7 @@ def main(args, state):
     region = args['region']
     threads = state['threads']
     debug_mode = state['debug_mode']
+    sep = state['sep']
     # create log directory - remove in snakemake
     log_folder = os.path.split(state['log'])[0]
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):

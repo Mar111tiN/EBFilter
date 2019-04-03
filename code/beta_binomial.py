@@ -39,7 +39,7 @@ def beta_binom_pvalue(params, n, k):
     return tempPV
 
 
-def beta_binomial_loglikelihood(params, Ns, Ks, var):
+def beta_binomial_loglikelihood(params, Ns, Ks):
 
     """
     Calculating log-likelihood of beta-binomial distribution
@@ -70,7 +70,7 @@ def beta_binomial_loglikelihood(params, Ns, Ks, var):
 
  
 
-def fit_beta_binomial(As, Bs, var):
+def fit_beta_binomial(As, Bs):
 
     """
     Obtaining maximum likelihood estimator of beta-binomial distribution
@@ -80,7 +80,7 @@ def fit_beta_binomial(As, Bs, var):
     """
     result = optimize.fmin_l_bfgs_b(beta_binomial_loglikelihood,
                                           [20, 20],
-                                          args = (As, Bs, var),
+                                          args = (As, Bs),
                                           approx_grad = True,
                                           bounds = [(0.1, 10000000), (1, 10000000)])
 

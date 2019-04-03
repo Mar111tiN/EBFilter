@@ -7,12 +7,13 @@ from .eb import get_eb_score
 def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
 
     pon_count = sum(1 for line in open(pon_list, 'r'))
+    sep = state['sep']
 
     ########### PANDAS IMPORT ################
     # mut_pd = pd.read_csv(mutfile, sep=',')
     # generate pileup files
-    anno2pileup(mut_file, output_path, tumor_bam, region,state)
-    anno2pileup(mut_file, output_path, pon_list, region,state)
+    anno2pileup(mut_file, output_path, tumor_bam, region, state)
+    anno2pileup(mut_file, output_path, pon_list, region, state)
     ##########
     # load pileup files into dictionaries pos2pileup_target['chr1:123453'] = "depth \t reads \t rQ"
     pos2pileup_target = {}
@@ -46,7 +47,7 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
     with open(mut_file, 'r') as file_in:
         with open(output_path, 'w') as file_out:
             for line in file_in:
-                field = line.rstrip('\n').split(',')
+                field = line.rstrip('\n').split(sep)
                 # header alarm
                 if field[0] == 'Chr':
                     continue
@@ -83,8 +84,8 @@ def worker(mut_file, tumor_bam, pon_list, output_path, region,state):
                     EB_score = get_eb_score(var, field_target, field_control, pon_count, state['filter_quals'])
                 
                 
-                # add the score and write the vcf record
-                print('\t'.join(field + [str(EB_score)]), file=file_out)
+                # add the score and write the record
+                print(sep.join(field + [str(EB_score)]), file=file_out)
 
 def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
     '''
@@ -93,7 +94,7 @@ def anno2pileup(mut_file, out_path, bam_or_pon, region, state):
     --> out_path.control.pileup
     '''
     # make region list for use in l_option of mpileup
-    make_region_list(mut_file) # in utils --> mut_file.region_list.bed
+    make_region_list(mut_file, state['sep']) # in utils --> mut_file.region_list.bed
     with open(state['log'], 'w') as log:
         with open(mut_file, 'r') as file_in:
             # determine wether it is bam or pon

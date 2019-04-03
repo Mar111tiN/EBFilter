@@ -42,7 +42,7 @@ def validate(mut_file, tumor_bam, pon_list):
                 sys.exit(1)
 
 
-def make_region_list(anno_path):
+def make_region_list(anno_path, sep):
     # make bed file for mpileup
     # with a pandas dataframe
     # better to open the original file as pandas in this function 
@@ -54,7 +54,7 @@ def make_region_list(anno_path):
     with open(anno_path) as file_in:
         with open(out_path, 'w') as file_out:
             for line in file_in:
-                field = line.rstrip('\n').split(',')
+                field = line.rstrip('\n').split(sep)
                 # fix for files with header
                 if field[0] == 'Chr':
                     continue

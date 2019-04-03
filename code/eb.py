@@ -18,14 +18,12 @@ def var_count_check(var, depth, read, rQ, is_verbose, filter_quals):
     # depth = 20
     # read = 'AAATTCCGGG^]ACGTA$CCT'
     # rQ = 'IIIIIIIFFCDDD'
-    # delete the start and end signs
-    print(read)
+    ####### VALIDATE ################################################
     if var[0].upper() not in "+-ATGCN":
             print(var + ": input var has wrong format!", file=sys.stderr)
             sys.exit(1)
     if depth == 0:
         return [0,0,0,0]
-
     # remove $ and ^] and ^I and so on
     read = sign_re.sub('', read)
 
@@ -97,7 +95,6 @@ def get_eb_score(var, F_target, F_control, pon_count, filter_quals):
     # pon_count = 3)
     # obtain the mismatch numbers and depths of target sequence data for positive and negative strands
 
-    print (F_target, F_control)
     if len(F_target) > 0:
         vars_target_p, depth_target_p, vars_target_n, depth_target_n = var_count_check(var, *F_target, False, filter_quals)
 
@@ -117,8 +114,8 @@ def get_eb_score(var, F_target, F_control, pon_count, filter_quals):
     # estimate the beta-binomial parameters for positive and negative strands
     ################# Debugging #######################
 
-    alpha_p, beta_p = fit_beta_binomial(np.array(depth_control_p), np.array(vars_control_p), var)  # var for debugging
-    alpha_n, beta_n = fit_beta_binomial(np.array(depth_control_n), np.array(vars_control_n), var)
+    alpha_p, beta_p = fit_beta_binomial(np.array(depth_control_p), np.array(vars_control_p))
+    alpha_n, beta_n = fit_beta_binomial(np.array(depth_control_n), np.array(vars_control_n))
 
     # evaluate the p-values of target mismatch numbers for positive and negative strands
     pvalue_p = beta_binom_pvalue([alpha_p, beta_p], depth_target_p, vars_target_p)
