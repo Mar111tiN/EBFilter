@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import pandas as pd
 
 def validate_region(region):
     '''
@@ -42,21 +43,17 @@ def validate(mut_file, tumor_bam, pon_list):
                 sys.exit(1)
 
 
-def make_region_list(anno_path, sep):
+def make_region_list(mut_df, out_path, threads):
     # make bed file for mpileup
     # with a pandas dataframe
-    # better to open the original file as pandas in this function 
-    # mut_pd = pd.read_csv(annopath)
-    # mut_pd[1] = mut_pd[1] - 1 - (mut_pd[3] == '-')
-    # mut_pd[2] = mut_pd[2] - (mut_pd[3] == '-')
-    # mut_pd[selected columns].to_csv(f"{anno_path}.region_list.bed", sep='\t')
-    out_path = f"{anno_path}.region_list.bed"
-    with open(anno_path) as file_in:
-        with open(out_path, 'w') as file_out:
-            for line in file_in:
-                field = line.rstrip('\n').split(sep)
-                # fix for files with header
-                if field[0] == 'Chr':
-                    continue
-                loc = int(field[1]) - (field[4] == "-")  # -1 if field 4 == '-' eg. deletion 
-                print(field[0], (loc - 1), loc, file=file_out, sep='\t')
+    # better to open the original file as pandas in this function
+    region_pd = mut_df.iloc[:,:5].copy()
+    region_pd.iloc[:,1] = mut_df.iloc[:,1] - 1 - (mut_df.iloc[:,4] == '-')
+    region_pd.iloc[:,2] = mut_df.iloc[:,1] - (mut_df.iloc[:,4] == '-')
+    # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
+    outpath = os.path.splitext(out_path)[0]
+    if threads > 1: # if thread not -1
+        outpath += f"_{os.getpid()}"
+    outpath += ".region_list.bed"
+    region_pd.iloc[:,:3].to_csv(outpath, sep='\t', header=None, index=False)
+    return outpath    

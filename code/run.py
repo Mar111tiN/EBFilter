@@ -4,8 +4,11 @@ import sys
 import re
 import os
 import pandas as pd
+import numpy as np
 import subprocess
 import multiprocessing
+from multiprocessing import Pool
+from functools import partial
 
 from .utils import validate
 from . import anno
@@ -33,46 +36,61 @@ def main(args, state):
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):
         os.makedirs(log_folder)
     
-
+    ############### ARGUMENTS #######################
     # file existence check for files and bams in pon_list
     validate(mut_file, tumor_bam, pon_list) 
-    if threads == 1:
+
+    if is_anno:
+        # create dataframe (maybe more options for other input file formats)
+        anno_df = pd.read_csv(args['mut_file'], sep=sep).sort_values(['Chr', 'Start'])
+        # create small copy for working with
+        mut_df = anno_df[anno_df.columns[:5]].copy()
+
+        if threads == 1:
         # non multi-threading mode
-        if is_anno:
-            anno.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
-        else: 
+            out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
+            if not state['debug_mode']:
+                subprocess.check_call(["rm", output_path + '.target.pileup'])
+                subprocess.check_call(["rm", output_path + '.control.pileup'])
+                subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
+        else: # multi-threading mode
+            mut_split = np.array_split(mut_df, threads)
+            # create partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
+            anno_partial = partial(anno.worker, tumor_bam, pon_list, output_path, region, state)
+            anno_pool = Pool(threads)
+            out_dfs = anno_pool.map(anno_partial, mut_split)  # mut_split is the iterable df_pool
+            anno_pool.close()
+            anno_pool.join()
+            out_df = pd.concat(out_dfs)
+            out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
+
+            # jobs = []
+            # out_dfs = [0] * threads # out_dfs as placeholder for the sub_dataframes
+            # for i in range(threads):
+            #     worker_args = (mut_split[i], tumor_bam, pon_list, out_dfs[i], region, state, i)
+            #     process = multiprocessing.Process(target=anno.worker, args=worker_args)                    
+            #     jobs.append(process)
+            #     process.start()       
+            # # wait for jobs to finish
+            # for i in range(threads):
+            #     jobs[i].join()      
+            # # merge the individual results
+
+            # anno.merge(output_path, threads)      
+            # # delete intermediate files
+            # if not debug_mode:
+            #     for i in range(threads):
+            #         rm_list = [f"{output_path}.{i}"]
+            #         rm_list += [f"{output_path}.sub.{i}"]
+            #         rm_list += [f"{output_path}.sub.{i}.control.pileup", f"{output_path}.sub.{i}.target.pileup"]
+            #         rm_list += [f"{output_path}.{i}.region_list.bed"]
+            #         subprocess.check_call(["rm", *rm_list])
+
+
+    else: 
+        if threads == 1:
             vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
             # delete intermediate files
-        if not state['debug_mode']:
-            subprocess.check_call(["rm", output_path + '.target.pileup'])
-            subprocess.check_call(["rm", output_path + '.control.pileup'])
-            subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
-    else:
-        # multi-threading mode
-        ##########
-        if is_anno:
-            # partition anno files
-            anno.partition(mut_file, output_path, threads)
-            jobs = []
-            for i in range(threads):
-                worker_args = (f"{output_path}.{i}", tumor_bam, pon_list, f"{output_path}.sub.{i}", region, state)
-                process = multiprocessing.Process(target=anno.worker, args=worker_args)                    
-                jobs.append(process)
-                process.start()       
-            # wait all the jobs to be done
-            for i in range(threads):
-                jobs[i].join()      
-            # merge the individual results
-            anno.merge(output_path, threads)      
-            # delete intermediate files
-            if not debug_mode:
-                for i in range(threads):
-                    rm_list = [f"{output_path}.{i}"]
-                    rm_list += [f"{output_path}.sub.{i}"]
-                    rm_list += [f"{output_path}.sub.{i}.control.pileup", f"{output_path}.sub.{i}.target.pileup"]
-                    rm_list += [f"{output_path}.{i}.region_list.bed"]
-                    subprocess.check_call(["rm", *rm_list])
-
         else:
             # partition vcf files
             vcf.partition(mut_file, f"{output_path}.sub.vcf", threads)
