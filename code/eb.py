@@ -38,12 +38,6 @@ def var_count_check(var, depth, read, rQ, is_verbose, filter_quals):
         indel_re = re.compile(re_string)
         read = indel_re.sub(r'\1', read)
 
-    
-        re_string = r"([ACGTNacgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(l) + "})"  # for exact length of insert
-        indel_re = re.compile(re_string)
-        read = indel_re.sub(r'\1', read)
-
-
 
     #############################################################################
     if len(read) != len(rQ):

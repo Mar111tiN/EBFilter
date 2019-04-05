@@ -63,28 +63,7 @@ def main(args, state):
             anno_pool.join()
             out_df = pd.concat(out_dfs)
             out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
-
-            # jobs = []
-            # out_dfs = [0] * threads # out_dfs as placeholder for the sub_dataframes
-            # for i in range(threads):
-            #     worker_args = (mut_split[i], tumor_bam, pon_list, out_dfs[i], region, state, i)
-            #     process = multiprocessing.Process(target=anno.worker, args=worker_args)                    
-            #     jobs.append(process)
-            #     process.start()       
-            # # wait for jobs to finish
-            # for i in range(threads):
-            #     jobs[i].join()      
-            # # merge the individual results
-
-            # anno.merge(output_path, threads)      
-            # # delete intermediate files
-            # if not debug_mode:
-            #     for i in range(threads):
-            #         rm_list = [f"{output_path}.{i}"]
-            #         rm_list += [f"{output_path}.sub.{i}"]
-            #         rm_list += [f"{output_path}.sub.{i}.control.pileup", f"{output_path}.sub.{i}.target.pileup"]
-            #         rm_list += [f"{output_path}.{i}.region_list.bed"]
-            #         subprocess.check_call(["rm", *rm_list])
+        out_df.to_csv(output_path, sep=sep)
 
 
     else: 
