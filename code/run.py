@@ -49,10 +49,7 @@ def main(args, state):
         if threads == 1:
         # non multi-threading mode
             out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
-            if not state['debug_mode']:
-                subprocess.check_call(["rm", output_path + '.target.pileup'])
-                subprocess.check_call(["rm", output_path + '.control.pileup'])
-                subprocess.check_call(["rm", "-f", f"{mut_file}.region_list.bed"])
+
         else: # multi-threading mode
             mut_split = np.array_split(mut_df, threads)
             # create partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
@@ -65,6 +62,7 @@ def main(args, state):
             out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
         out_df.to_csv(output_path, sep=sep)
 
+        anno_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'], left_index=True)
 
     else: 
         if threads == 1:
