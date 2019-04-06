@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from subprocess import Popen, PIPE
 from io import StringIO
+from functools import partial
 from .utils import make_region_list, clean_up_df, cleanup_badQ
 import re
 from .eb import get_eb_score
@@ -19,7 +20,7 @@ def worker(tumor_bam, pon_list, output_path, region, state, mut_df):
     clean_up_df(mut_df, pon_count)
 
     # cleanup_badQ should not be necessary because these bases have been removed using mpileup -Q option (?)  
-    # cleanup_badQ(mut_df, pon_count, state['filter_quals'])
+    #cleanup_badQ(mut_df, pon_count, state['filter_quals'])
 
     ############# FOR DEBUGGING #######################
     if state['debug_mode']:
@@ -27,15 +28,9 @@ def worker(tumor_bam, pon_list, output_path, region, state, mut_df):
         mut_df.to_csv(out_file, sep='\t', index=False)
 
     ########### EB score ############
-    # mut_pd['EB_score'] = mut_pd.apply(EB_score, axis=1)
+    mut_df['EB_score'] = mut_df.apply(partial(EB_score, pon_count), axis=1)
 
-    #                 # get_eb_score('+A', [depth, reads, rQ], [depth1, reads1, rQ1, depth2, reads2, rQ2, depth3, reads3, rQ3], 3, state)
-    #                 EB_score = get_eb_score(var, field_target, field_control, pon_count, state['filter_quals'])
-                
-                
-    #             # add the score and write the record
-    #             print(sep.join(field + [str(EB_score)]), file=file_out)
-    return mut_df
+    return mut_df[mut_df.columns[:5], mut_df['EB_score']]
 
 def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
     '''
@@ -68,9 +63,8 @@ def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
                 mpileup_cmd += ["-b", pon_list]   # pileup from pon_list
             pileup_stream = Popen(mpileup_cmd, stdout=PIPE, stderr=log)
             pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
-
+            # the columns needed in the dataframe
             names = ['Chr', 'Start', 'Ref']
-
             # target pileup
             if 'target' in out:   
                 names += ['depth0', 'read0', 'Q0']
