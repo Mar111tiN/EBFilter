@@ -60,10 +60,15 @@ def main(args, state):
             anno_pool.join()
             out_df = pd.concat(out_dfs)
             out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
-        out_df.to_csv(output_path, sep=sep)
 
-        anno_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'], left_index=True)
+        final_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'])
+        ################ DEBUG #####################
+        if state['debug_mode']:
+            out_file = output_path.replace('eb', "eb_only")
+            out_df.to_csv(out_file, sep=sep, index=False)
 
+        final_df.to_csv(output_path, sep='\t', index=False)
+        
     else: 
         if threads == 1:
             vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)

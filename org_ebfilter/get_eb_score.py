@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-
 import control_count
 import beta_binomial
 import utils
