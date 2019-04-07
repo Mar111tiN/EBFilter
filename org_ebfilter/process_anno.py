@@ -105,5 +105,3 @@ def anno2pileup(inputFilePath, outputFilePath, bamPath, mapping_qual_thres, base
     FNULL.close()
     hIN.close()
     hOUT.close()
-
-

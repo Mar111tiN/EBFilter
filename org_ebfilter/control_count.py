@@ -57,7 +57,7 @@ def varCountCheck(var, depth, baseBar, qualBar, base_qual_thres, verbose):
         if type == "+":
             if strand == "+":
                 insertion_vb_p += 1
-                if var_match: insertion_p += 1
+                if var_match: insertion_p += 1 # only once per read
             else:
                 insertion_vb_n += 1
                 if var_match: insertion_n += 1

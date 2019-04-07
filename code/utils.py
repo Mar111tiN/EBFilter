@@ -16,7 +16,9 @@ def validate_region(region):
             return True
 
 def validate(mut_file, tumor_bam, pon_list):
-    # file existence check
+    '''
+    file existence checks
+    '''
     if not os.path.exists(mut_file):
         sys.stderr.write(f"No target mutation file: {mut_file}")
         sys.exit(1)
@@ -59,13 +61,15 @@ def make_region_list(mut_df, out_path, threads):
     region_pd.iloc[:,:3].to_csv(outpath, sep='\t', header=None, index=False)
     return outpath    
 
-sign_re = re.compile(r'\^.|\$')
-indel_simple = re.compile(r'[\+\-]([0-9]+)')
 
 def clean_up_df(mut_df, pon_count):
     '''
     removes indels and start/end signs from pileup data
     '''
+    # regexps for start/end sign
+    sign_re = re.compile(r'\^.|\$')
+    # regexps for indels with a group for getting indel length
+    indel_simple = re.compile(r'[\+\-]([0-9]+)')
     # globally remove start/end signs
     for i in range(pon_count+1):
         read = f"read{i}"
@@ -77,12 +81,15 @@ def clean_up_df(mut_df, pon_count):
     def remove_indels(read, length):
         '''
         removes indel traces in read using indel length argument
+        indels on pos strand are turned into '-'
+        indels on neg strand are turned into '_'
         '''
-
         # construct the regexp string using the indel length
-        indel_re = re.compile(r"([ACGTNacgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(length) + "})")
+        pos_indel_re = re.compile(r"([ACGTN])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(length) + "})")
+        neg_indel_re = re.compile(r"([acgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(length) + "})")
         # do the indel_re substitution on target and control reads
-        return indel_re.sub(r'\1', read)
+        read = pos_indel_re.sub('-', read)
+        return neg_indel_re.sub('_', read)
 
     # function to remove indels
     def clean_indels(i, row):
@@ -93,14 +100,11 @@ def clean_up_df(mut_df, pon_count):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], indel_length)
         return row
 
-    # create partial function for use in df.apply
-    # clean_indels_i = partial(clean_indels, pon_count)
     # apply partial clean_indels to remove indel traces in pileup
     mut_df[is_indel] = mut_df[is_indel].apply(partial(clean_indels, pon_count), axis=1)
     # in case there are indels only in the control files
     def clean_this_row(i, row):
         read = row[f"read{i}"]
-        print('index: ', i, 'read: ', read)
         m = indel_simple.search(read)
         # check has to be done because apply is applied one extra time (internally checking for optimization?)
         if m:
@@ -120,10 +124,20 @@ def clean_up_df(mut_df, pon_count):
 
 
 def cleanup_badQ(mut_df, pon_count, filters):
+    '''
+    removes base qualities below given threshold ( state['Q'] )..
+        and corresponding read bases
+    this function should be redundant as the -Q option..
+        already applies during mpileup
+    '''
+    # regexps for the badQ filtering
     filter_string = r"([" + filters + "])"
     filter_re = re.compile(filter_string)
 
     def remove_badQ(i,row):
+        '''
+        used as partial callable within the pd.apply
+        '''
         Q = row[f"Q{i}"]
         read = row[f"read{i}"]
         while filter_re.search(Q):
@@ -132,9 +146,10 @@ def cleanup_badQ(mut_df, pon_count, filters):
             pos = max(m.start(),m.end()-1)
             read = read[:pos] + read[pos+1:]
         return row   
-
+    # set boolean mask for snp (we ignore indels)
     is_snp = (mut_df['Ref'] != '-') & (mut_df['Alt'] != '-')
     for i in range(pon_count):
+        # go through all Q columns and look for bad qualities
         Q = f"Q{i}"
         has_badQ = mut_df[Q].str.contains(filter_re) & mut_df[Q].str.len() != 1
         bad_df = mut_df[is_snp & has_badQ]

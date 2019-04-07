@@ -35,7 +35,10 @@ parser.add_argument('-t', metavar = "thread_num", default='1', type=int,
                     help = "the number of threads")
 
 parser.add_argument('-Q', metavar = "base_qual_thres", default='15', type=int,
-                    help = "threshold for base quality for calculating base counts")
+                    help = "base quality threshold for calculating base counts")
+
+parser.add_argument('-fit_with', metavar = "penalty_term_for_fitting", default='0.5', type=float,
+                    help = "penalty term for beta binomial fitting parameters")
 
 parser.add_argument('--ff', metavar = "filter_flags", default='UNMAP,SECONDARY,QCFAIL,DUP', type=str,
                     help = "skip reads with mask bits set")
@@ -57,6 +60,7 @@ state['ff'] = args.ff
 state['q'] = args.q
 state['Q'] = args.Q
 state['ff'] = args.ff
+state['fitting_penalty'] = args.fit_with
 if arg.log:
   state['log'] = args.log
 else:

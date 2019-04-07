@@ -278,6 +278,3 @@ def main(args):
                 for i in range(thread_num):
                     subprocess.check_call(["rm", outputPath + ".tmp.input.vcf." + str(i)])
                     subprocess.check_call(["rm", outputPath + "." + str(i)])
-
-
-
