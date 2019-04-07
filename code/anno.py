@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import subprocess
 from subprocess import Popen, PIPE
 from io import StringIO
 from functools import partial
@@ -86,7 +87,7 @@ def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
 
     ############## FOR DEBUGGING #######################
     if not state['debug_mode']:
-        subprocess.check_call(["rm", bedfile])
+        subprocess.check_call(["rm", bed_file])
     else:
         out_file = bed_file.replace('region_list.bed', f"{out}.merged.csv")
         mut_df.to_csv(out_file, sep='\t', index=False)
