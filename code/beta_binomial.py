@@ -27,6 +27,11 @@ def beta_binom_pvalues(params, target_df):
         obs_list = [target_df + np.array([0,i]) for i in range(0, n_minus_k + 1)]
         # get the list of loglikelihoods per observation
         ll_list = [bb_loglikelihood(params, obs) for obs in obs_list]
+
+        #######################################################
+        # print(f'ab: {params}\n observations: {obs_list} ll {ll_list}\n')
+        #######################################################
+
         # get the sum of exponentials of loglikelihoods (densities) per observation
 
         p_value = sum([math.exp(ll) for ll in ll_list])
@@ -52,7 +57,11 @@ def bb_loglikelihood(params, count_df):
     # perform matrix multiplication to get inputs to log-gamma
     input_matrix = np.matmul(count_matrix,KS_matrix) + ab_matrix
     # get corresponding log-gamma values and reduce over pon-values
-    gamma_matrix = np.sum(gammaln(input_matrix), axis=0)
+    try:  # check whether gammatrix is 2-dim - otherwise sum aggregation over axis 0 is faulty
+        input_matrix.shape[1] # will raise IndexError if only 1-dim
+        gamma_matrix = np.sum(gammaln(input_matrix), axis=0)
+    except IndexError:
+        gamma_matrix = gammaln(input_matrix)
     # add or subtract using gamma_reduce matrix and sum to loglikelihood (scalar)
     log_likelihood = np.sum(gamma_matrix * gamma_reduce)
     return log_likelihood
@@ -75,8 +84,8 @@ def fit_beta_binomial(count_df, pen):
         '''
 
         # Here, we apply the penalty term of alpha and beta (default 0.5 is slightly arbitray...)
-        return 0.5 * math.log(sum(params)) - bb_loglikelihood(params, count_df)
-
+        result = 0.5 * math.log(sum(params)) - bb_loglikelihood(params, count_df)
+        return result
     # get the respective control matrices (as dataframe) for positive and negative strands
     count_p = count_df.loc[:, ['depth_p', 'mm_p']]
     count_n = count_df.loc[:, ['depth_n', 'mm_n']]
@@ -91,4 +100,5 @@ def fit_beta_binomial(count_df, pen):
                            args = (count_n, pen), approx_grad = True,
                            bounds = [(0.1, 10000000), (1, 10000000)]
                           )[0]
+    # print(f'abP: {ab_p} - abN: {ab_n}')
     return {'p':ab_p, 'n':ab_n}
