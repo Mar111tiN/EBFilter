@@ -1,5 +1,6 @@
 import os
 import sys
+import csv
 import re
 import pandas as pd
 from functools import partial
@@ -44,6 +45,43 @@ def validate(mut_file, tumor_bam, pon_list):
             if not os.path.exists(file + ".bai") and not os.path.exists(os.path.splitext(file)[0] + '.bai'):
                 sys.stderr.write(f"No index for control bam file: {file}")
                 sys.exit(1)
+
+def read_anno_csv(mut_file, state):
+    '''
+    reads in the mutation file and resets the relevant header columns required for dataframe operations
+    --> returns the dataframe and the original header names
+    if no header is detected, the relevant files are names as needed and additional columns are named other1, other2,...
+    '''
+    def to_int(Chr_name):
+        '''
+        converts all number chromosomes to int
+        '''
+        try:
+            return int(Chr_name)
+        except ValueError:
+            return Chr_name       
+
+
+    with open(mut_file, 'r') as input_file:
+        has_header = csv.Sniffer().has_header(input_file.read(1024))
+
+    sep = state['sep']
+    with open(state['log'],'w+') as log:
+        print(f'Loading annotation file {mut_file} into dataframe', file=log)
+
+
+        if has_header:
+            print(f'Header detected', file=log)
+            anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
+            org_columns = anno_df.columns
+            anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
+        else:
+            anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
+            org_columns = None
+            rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
+            anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
+            print(f'Adding header: Chr\tStart\tEnd\tRef\tAlt\tother1...', file=log)
+    return (anno_df.sort_values(['Chr', 'Start']), org_columns)
 
 
 def make_region_list(mut_df, out_path, threads):
@@ -94,7 +132,12 @@ def clean_up_df(mut_df, pon_count):
     # function to remove indels
     def clean_indels(i, row):
         # search for the indel length in target read
-        indel_length = indel_simple.search(row['read0']).group(1)
+        m = indel_simple.search(row['read0'])
+        if m:
+            indel_length = m.group(1)
+        else:
+            sys.stderr.write(f"No indel detected in read pileup at position {row['Start']}.\t Please check validity of annotation file!")
+            sys.exit(1)
         # in every column, remove the indel traces
         for i in range(i+1):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], indel_length)

@@ -10,7 +10,7 @@ import multiprocessing
 from multiprocessing import Pool
 from functools import partial
 
-from .utils import validate
+from .utils import validate, read_anno_csv
 from . import anno
 from . import vcf
 
@@ -42,7 +42,7 @@ def main(args, state):
 
     if is_anno:
         # create dataframe (maybe more options for other input file formats)
-        anno_df = pd.read_csv(args['mut_file'], sep=sep).sort_values(['Chr', 'Start'])
+        anno_df, original_columns = read_anno_csv(mut_file, state)
         # create small copy for working with
         mut_df = anno_df[anno_df.columns[:5]].copy()
 
@@ -62,12 +62,17 @@ def main(args, state):
             out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
 
         final_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'])
-        ################ DEBUG #####################
+        if original_columns is not None:
+            final_df.columns = list(original_columns) + ['EB_score']
+        final_df.to_csv(output_path, sep='\t', index=False)
+
+        ################ DEBUG #####################################
         if state['debug_mode']:
             out_file = output_path.replace('eb', "eb_only")
             out_df.to_csv(out_file, sep=sep, index=False)
+        ############################################################
 
-        final_df.to_csv(output_path, sep='\t', index=False)
+        
         
     else: 
         if threads == 1:
