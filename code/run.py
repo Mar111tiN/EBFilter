@@ -4,15 +4,19 @@ import sys
 import re
 import os
 import pandas as pd
+import numpy as np
 import subprocess
 import multiprocessing
+from multiprocessing import Pool
+from functools import partial
 
-from .utils import validate
+from .utils import validate, read_anno_csv
 from . import anno
 from . import vcf
 
 
-def main(args,state):
+
+def main(args, state):
     '''
     validates files and refers to respective functions
     '''
@@ -24,43 +28,56 @@ def main(args,state):
     output_path = args['output_path']
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
     region = args['region']
+    threads = state['threads']
+    debug_mode = state['debug_mode']
+    sep = state['sep']
     # create log directory - remove in snakemake
     log_folder = os.path.split(state['log'])[0]
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):
         os.makedirs(log_folder)
     
-
+    ############### ARGUMENTS #######################
     # file existence check for files and bams in pon_list
     validate(mut_file, tumor_bam, pon_list) 
-    if state['threads'] == 1:
-        # non multi-threading mode
-        if is_anno:
-            anno.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
-        else: 
-            vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
-    else:
-        # multi-threading mode
-        ##########
-        if is_anno:
-            # partition anno files
-            anno.partition(mut_file, output_path, threads)
-            jobs = []
-            for i in range(threads):
-                worker_args = (f"{output_path}.{i}", tumor_bam, pon_list, f"{output_path}.sub.{i}", region, state)
-                process = multiprocessing.Process(target=EBFilter_worker_anno, args=worker_args)                    
-                jobs.append(process)
-                process.start()       
-            # wait all the jobs to be done
-            for i in range(threads):
-                jobs[i].join()      
-            # merge the individual results
-            anno.merge(output_path, threads)      
-            # delete intermediate files
-            if not debug_mode:
-                for i in range(threads):
-                    print('delete')
-                    subprocess.check_call(["rm", f"{output_path}.{i}", f"{output_path}.{i}.control.pileup", f"{output_path}.{i}.target.pileup"])
 
+    if is_anno:
+        # create dataframe (maybe more options for other input file formats)
+        anno_df, original_columns = read_anno_csv(mut_file, state)
+        # create small copy for working with
+        mut_df = anno_df[anno_df.columns[:5]].copy()
+
+        if threads == 1:
+        # non multi-threading mode
+            out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
+
+        else: # multi-threading mode
+            mut_split = np.array_split(mut_df, threads)
+            # create partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
+            anno_partial = partial(anno.worker, tumor_bam, pon_list, output_path, region, state)
+            anno_pool = Pool(threads)
+            out_dfs = anno_pool.map(anno_partial, mut_split)  # mut_split is the iterable df_pool
+            anno_pool.close()
+            anno_pool.join()
+            out_df = pd.concat(out_dfs)
+            out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
+
+        final_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'])
+        if original_columns is not None:
+            final_df.columns = list(original_columns) + ['EB_score']
+        final_df.to_csv(output_path, sep='\t', index=False)
+
+        ################ DEBUG #####################################
+        if state['debug_mode']:
+            out_file = output_path.replace('eb', "eb_only")
+            out_df.to_csv(out_file, sep=sep, index=False)
+        ############################################################
+
+        
+        
+    else: 
+        if threads == 1:
+            vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
+            # delete intermediate files
         else:
             # partition vcf files
             vcf.partition(mut_file, f"{output_path}.sub.vcf", threads)

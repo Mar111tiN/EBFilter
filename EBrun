@@ -5,36 +5,44 @@ import argparse
 
 parser = argparse.ArgumentParser(prog = "EBFilter")
 
-parser.add_argument("--version", action = "version", version = "EBFilter-0.2.1")
+parser.add_argument("--version", action = "version", version = "EBFilter-0.3.7")
 
-parser.add_argument("targetMutationFile", metavar = "target.vcf", type = str,
-                          help = "the path to the mutation file")
+parser.add_argument("targetMutationFile", metavar = "target.anno", type = str,
+                          help = "the path to the mutation file (vcf/anno)")
 
 parser.add_argument("targetBamPath", metavar = "target.bam", type = str,
-                          help = "the path to the target bam file")
+                          help = "the path to the target bam file (+ .bai)")
 
 parser.add_argument("controlBamPathList", metavar = "controlBam_list.txt", type = str,
-                          help = "the list of paths to control bam files")
+                          help = "the list of paths to control bam files (+ .bai)")
 
-parser.add_argument("outputPath", metavar = "output.vcf", type = str,
+parser.add_argument("output_path", metavar = "output.anno", type = str,
                           help = "the path to the output")
 
-parser.add_argument('-f', choices=['vcf', 'anno'], default = 'vcf',
-                    help = "the format of mutation file vcf or annovar (tsv) format")
+parser.add_argument("-log", metavar = "log.txt", type = str,
+                          help = "the path to log file")
 
-parser.add_argument('-t', metavar = "thread_num", default='1', type=int,
-                    help = "the number of threads")
+parser.add_argument("-sep", metavar = "mut_file_separator", type = str,
+                          help = "the format for the annotation csv (, or \t)")
+
+parser.add_argument("-sep", metavar = "mut_file_separator", default=',', type = str,
+                          help = "the format for the annotation csv (, or \t)")
 
 parser.add_argument('-q', metavar = "mapping_qual_thres", default='20', type=int,
                     help = "threshold for mapping quality for calculating base counts")
 
+parser.add_argument('-t', metavar = "thread_num", default='1', type=int,
+                    help = "the number of threads")
+
 parser.add_argument('-Q', metavar = "base_qual_thres", default='15', type=int,
-                    help = "threshold for base quality for calculating base counts")
+                    help = "base quality threshold for calculating base counts")
+
+parser.add_argument('-fit_with', metavar = "penalty_term_for_fitting", default='0.5', type=float,
+                    help = "penalty term for beta binomial fitting parameters")
 
 parser.add_argument('--ff', metavar = "filter_flags", default='UNMAP,SECONDARY,QCFAIL,DUP', type=str,
                     help = "skip reads with mask bits set")
 
-parser.add_argument("--loption", help = "use samtools mpileup -l option", action='store_true', default=False)
 
 parser.add_argument("--region", default = '', type = str,
                     help = "restrict the chromosomal region for mutation. active only if loption is on")
@@ -43,4 +51,23 @@ parser.add_argument("--debug", default = False, action = 'store_true', help = "k
 
 args = parser.parse_args()
 
-main(args)
+# passing config parameters to state for compatibility with snakemake implementation
+state = {}
+state['threads'] = args.t
+state['debug_mode'] = args.debug
+state['sep'] = args.sep
+state['ff'] = args.ff
+state['q'] = args.q
+state['Q'] = args.Q
+state['ff'] = args.ff
+state['fitting_penalty'] = args.fit_with
+if arg.log:
+  state['log'] = args.log
+else:
+  state['log'] = os.path.splitext(args.output_path)[0] + '.log'
+filter_quals = ''
+for qual in range( 33, 33 + args.Q): 
+    filter_quals += chr( qual ) 
+state['filter_quals'] = filter_quals
+
+main(args, state)
