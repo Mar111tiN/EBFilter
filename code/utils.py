@@ -4,6 +4,7 @@ import csv
 import re
 import pandas as pd
 from functools import partial
+from subprocess import POPEN, PIPE, DEVNULL
 
 def validate_region(region):
     '''
@@ -204,3 +205,14 @@ def cleanup_badQ(mut_df, pon_count, filters):
 
     return mut_df
 
+
+def bam_to_chr_list(bam_file):
+    '''
+    creates a list of chromosome names for the input bam
+    '''
+
+    bam_stats_cmd = ['samtools', 'idxstats', bam_file]
+    bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
+    bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
+    bam_stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
+    return list(bam_stats_df[0].T)

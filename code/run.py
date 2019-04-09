@@ -32,9 +32,10 @@ def main(args, state):
             cache_file = args['cache_path']
         else:
             # if no path to cache file is given, it will be generated at pon_list destination
-            cache_file = os.path.join(os.path.splitext(args['pon_list'])[0], '.ABcache')  
+            cache_file = os.path.join(os.path.splitext(args['pon_list'])[0], '.ABcache')
+        state['cache_dir'] = os.path.dirname(cache_file)
         pon_list = validate_pon(args['pon_list'])
-        return generate_cache(pon_list, state, threads)
+        return generate_cache(pon_list, state)
     else: # EBscore mode
         if 'cache_path' in args.keys():
             cache_file = validate(args['cache_path'], "No ABcache file found")
