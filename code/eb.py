@@ -11,7 +11,7 @@ indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_exp = re.compile(r'^([^ \t\n\r\f\v,]+):([0-9]+)\-([0-9]+)')
 
 
-def get_count_df_snp(row):
+def get_count_df_snp(row, start_col):
     '''
     extracts the read_count matrix from each compound data frame row
     read/Q/[0] is target
@@ -19,24 +19,24 @@ def get_count_df_snp(row):
     '''
     var = row['Alt'].upper()
     matrix = pd.DataFrame()
-    matrix['depth_p'] = row.iloc[6::3].str.count(r'[ACTG]')
-    matrix['mm_p'] = row.iloc[6::3].str.count(var)
-    matrix['depth_n'] = row.iloc[6::3].str.count(r'[actg]')
-    matrix['mm_n'] = row.iloc[6::3].str.count(var.lower())
+    matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG]')
+    matrix['mm_p'] = row.iloc[start_col:3].str.count(var)
+    matrix['depth_n'] = row.iloc[start_col:3].str.count(r'[actg]')
+    matrix['mm_n'] = row.iloc[start_col:3].str.count(var.lower())
     return matrix
 
 
-def get_count_df_indels(row):
+def get_count_df_indels(row, start_col):
     '''
     extracts the read_count matrix from each compound data frame row
     read/Q/[0] is target
     ___[1:] are control counts
     '''
     matrix = pd.DataFrame()
-    matrix['depth_p'] = row.iloc[6::3].str.count(r'[ACTG\-]')
-    matrix['mm_p'] = row.iloc[6::3].str.count('-')
-    matrix['depth_n'] = row.iloc[6::3].str.count(r'[actg_]')
-    matrix['mm_n'] = row.iloc[6::3].str.count('_')
+    matrix['depth_p'] = row.iloc[start_col:3].str.count(r'[ACTG\-]')
+    matrix['mm_p'] = row.iloc[start_col:3].str.count('-')
+    matrix['depth_n'] = row.iloc[start_col:3].str.count(r'[actg_]')
+    matrix['mm_n'] = row.iloc[start_col:3].str.count('_')
     return matrix
 
 
@@ -48,9 +48,9 @@ def get_EB_score(pen, row):
     """
     # convert the row into a count matrix for depth and mismatch over reads
     if (row['Ref'] == '-') or row['Alt'] == '-':
-        count_df = get_count_df_indels(row)
+        count_df = get_count_df_indels(row, 6)
     else:
-        count_df = get_count_df_snp(row)
+        count_df = get_count_df_snp(row, 6)
 
     ############ FITTING ####################################
     # get the respective control matrices (as dataframe) for positive and negative strands
