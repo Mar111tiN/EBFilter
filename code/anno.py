@@ -74,7 +74,7 @@ def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
             # control pileup
             else:
                 # create the columns for the control pileup data: depth0 read0 Q0 depth1 read1 Q1 depth2 ....
-                for i in range(10):
+                for i in range(pon_count):
                     names += [f"depth{i+1}", f"read{i+1}", f"Q{i+1}"]
                 pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names=names).drop(columns='Ref')
 
