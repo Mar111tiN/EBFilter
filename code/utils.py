@@ -16,35 +16,39 @@ def validate_region(region):
         if region_match:
             return True
 
-def validate(mut_file, tumor_bam, pon_list):
+def validate(file, message):
     '''
     file existence checks
     '''
-    if not os.path.exists(mut_file):
-        sys.stderr.write(f"No target mutation file: {mut_file}")
+    if not os.path.exists(file):
+        sys.stderr.write(f"{message}: {file}")
         sys.exit(1)
+    else:
+        return file
 
-    if not os.path.exists(tumor_bam):
-        sys.stderr.write(f"No target bam file: {tumor_bam}")
+
+def validate_bam(bam_file):
+    '''
+    file existence for bam files and accompanying bai files
+    '''
+    validate(bam_file, "No control bam file")
+    if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
+        sys.stderr.write(f"No index for control bam file: {bam_file}")
         sys.exit(1)
+    return bam_file
 
-    if not os.path.exists(tumor_bam + ".bai") and not os.path.exists(os.path.splitext(tumor_bam)[0] + '.bai'):
-        sys.stderr.write(f"No index for target bam file: {tumor_bam}")
-        sys.exit(1)
 
-    if not os.path.exists(pon_list):
-        sys.stderr.write(f"No control list file: {pon_list}")
-        sys.exit(1)
+def validate_pon(pon_list):
+    '''
+    file existence check for pon_list and the containing bam (and bai) files
+    '''
+    validate(pon_list, "No control list file")
+    with open(pon_list) as file_list:
+        for file in file_list:
+            bam_file = file.rstrip()
+            validate_bam(bam_file)
+    return pon_list
 
-    with open(pon_list) as hIN:
-        for file in hIN:
-            file = file.rstrip()
-            if not os.path.exists(file):
-                sys.stderr.write(f"No control bam file: {file}")
-                sys.exit(1)
-            if not os.path.exists(file + ".bai") and not os.path.exists(os.path.splitext(file)[0] + '.bai'):
-                sys.stderr.write(f"No index for control bam file: {file}")
-                sys.exit(1)
 
 def read_anno_csv(mut_file, state):
     '''

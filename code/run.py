@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-import pysam
 import sys
 import re
 import os
@@ -10,9 +9,10 @@ import multiprocessing
 from multiprocessing import Pool
 from functools import partial
 
-from .utils import validate, read_anno_csv
+from .utils import validate, read_anno_csv, validate_bam, validate_pon
 from . import anno
 from . import vcf
+from .cache import generate_cache
 
 
 
@@ -21,24 +21,40 @@ def main(args, state):
     validates files and refers to respective functions
     '''
 
+    state['cache_mode'] = False
     ############### ARGUMENTS #######################
-    mut_file = args['mut_file']
-    tumor_bam = args['tumor_bam']
-    pon_list = args['pon_list']
-    output_path = args['output_path']
-    is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
-    region = args['region']
     threads = state['threads']
     debug_mode = state['debug_mode']
+
+    # generate cache
+    if args['generate_cache']:
+        if 'cache_path' in args.keys():
+            cache_file = args['cache_path']
+        else:
+            # if no path to cache file is given, it will be generated at pon_list destination
+            cache_file = os.path.join(os.path.splitext(args['pon_list'])[0], '.ABcache')  
+        pon_list = validate_pon(args['pon_list'])
+        return generate_cache(pon_list, state, threads)
+    else: # EBscore mode
+        if 'cache_path' in args.keys():
+            cache_file = validate(args['cache_path'], "No ABcache file found")
+            state['cache_mode'] = True
+        else:
+            pon_list = validate_pon(args['pon_list'])            
+        
+    # get arguments for EBscore 
     sep = state['sep']
+    mut_file = validate(args['mut_file'], "No target mutation file")
+    tumor_bam = validate_bam(args['tumor_bam'])
+    output_path = args['output_path']   
+    is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
+    region = args['region']
+
     # create log directory - remove in snakemake
     log_folder = os.path.split(state['log'])[0]
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):
         os.makedirs(log_folder)
     
-    ############### ARGUMENTS #######################
-    # file existence check for files and bams in pon_list
-    validate(mut_file, tumor_bam, pon_list) 
 
     if is_anno:
         # create dataframe (maybe more options for other input file formats)
