@@ -18,7 +18,7 @@ def worker(tumor_bam, pon_list, output_path, region, state, mut_df):
     mut_df = anno2pileup(mut_df, output_path, tumor_bam, pon_list, region, state)
 
     # in_place removal of indel traces and start/end signs in pileup data
-    clean_df = clean_up_df(mut_df, pon_count)
+    clean_up_df(mut_df, pon_count)
 
     # cleanup_badQ should not be necessary because these bases have been removed using mpileup -Q option (?)  
     #cleanup_badQ(mut_df, pon_count, state['filter_quals'])
@@ -28,10 +28,11 @@ def worker(tumor_bam, pon_list, output_path, region, state, mut_df):
         out_file = output_path.replace('eb', "clean")
         mut_df.to_csv(out_file, sep='\t', index=False)
 
-    ########### EB score ############
-    clean_df['EB_score'] = mut_df.apply(partial(get_EB_score, state['fitting_penalty']), axis=1)
+    ########### EB score ###############################
+    mut_df['EB_score'] = mut_df.apply(partial(get_EB_score, state['fitting_penalty']), axis=1)
 
-    return clean_df.loc[:,['Chr', 'Start', 'EB_score']]
+    # return minimal consensus df for merge with annotated df
+    return mut_df.loc[:,['Chr', 'Start', 'EB_score']]
 
 def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
     '''

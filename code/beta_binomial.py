@@ -26,7 +26,7 @@ def beta_binom_pvalues(params, target_df):
         # get the list of observations [n, k] to [n, n]
         obs_list = [target_df + np.array([0,i]) for i in range(0, n_minus_k + 1)]
         # get the list of loglikelihoods per observation
-        ll_list = [bb_loglikelihood(params, obs) for obs in obs_list]
+        ll_list = [bb_loglikelihood(params, obs, True) for obs in obs_list]
 
         #######################################################
         # print(f'ab: {params}\n observations: {obs_list} ll {ll_list}\n')
@@ -49,7 +49,7 @@ def beta_binom_pvalues(params, target_df):
 KS_matrix = np.array([[1,0,1,1,0,1,0,0,0],[0,1,-1,0,1,-1,0,0,0]])
 gamma_reduce = np.array([1,-1,-1,-1,1,1,1,-1,-1])
 
-def bb_loglikelihood(params, count_df):
+def bb_loglikelihood(params, count_df, is_1d):
     [a, b] = params
     ab_matrix = np.array([1,1,1,a+b,a,b,a+b,a,b])
     # convert df into matrix for np.array operations that change dims
@@ -57,11 +57,10 @@ def bb_loglikelihood(params, count_df):
     # perform matrix multiplication to get inputs to log-gamma
     input_matrix = np.matmul(count_matrix,KS_matrix) + ab_matrix
     # get corresponding log-gamma values and reduce over pon-values
-    try:  # check whether gammatrix is 2-dim - otherwise sum aggregation over axis 0 is faulty
-        input_matrix.shape[1] # will raise IndexError if only 1-dim
-        gamma_matrix = np.sum(gammaln(input_matrix), axis=0)
-    except IndexError:
+    if is_1d: # check whether gammatrix is 2-dim - otherwise sum aggregation over axis 0 is faulty
         gamma_matrix = gammaln(input_matrix)
+    else:  
+        gamma_matrix = np.sum(gammaln(input_matrix), axis=0)
     # add or subtract using gamma_reduce matrix and sum to loglikelihood (scalar)
     log_likelihood = np.sum(gamma_matrix * gamma_reduce)
     return log_likelihood
@@ -84,7 +83,7 @@ def fit_beta_binomial(count_df, pen):
         '''
 
         # Here, we apply the penalty term of alpha and beta (default 0.5 is slightly arbitray...)
-        result = 0.5 * math.log(sum(params)) - bb_loglikelihood(params, count_df)
+        result = 0.5 * math.log(sum(params)) - bb_loglikelihood(params, count_df, False) # matrix is dim2
         return result
     # get the respective control matrices (as dataframe) for positive and negative strands
     count_p = count_df.loc[:, ['depth_p', 'mm_p']]
