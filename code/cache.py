@@ -10,6 +10,7 @@ from .utils import clean_up_df, cleanup_badQ, bam_to_chr_list, clean_read_column
 from .eb import get_count_df_snp
 from .beta_binomial import fit_beta_binomial
 import re
+import math
 
 sign_re = re.compile(r'\^.|\$')
 acgt = ['A','C','T','G']
@@ -105,10 +106,10 @@ def pileup2AB(state, chromosome, pileup_df):
     # create a copy of just the Chr and Start coords to store the AB values in
     AB_df = pileup_df.iloc[:,[0,1]].copy()
 
-    def get_AB(penalty, pileup_length, row):
+    def get_AB(penalty, length, start, row):
         bb_s = pd.Series()
-        if row.name % 5000 == 0 and row.name > 0:
-            print(f"{math.round(int(row.name) / pileup_length, 1)}% ({row.name} lines) processed..")
+        if (row.name - start) % 2000 == 0 and (row.name - start) > 0:
+            print(f"Process {os.getpid()}: {round((int(row.name) -start)/ length * 100, 1)}% ({row.name - start} lines) processed..")
         for var in acgt:
             # get the count matrix
             count_df = get_count_df_snp(row, var, 3)
@@ -124,9 +125,10 @@ def pileup2AB(state, chromosome, pileup_df):
 
     var_columns = [f'{var}{strand}{param}' for var in acgt for strand in ['+', '-'] for param in ['a','b']]
     pileup_length = len(pileup_df.index)
-    print(f'Computing ABs for chromosome: {chromosome}\n{pileup_length} rows to go..')
-    AB_df[var_columns] = pileup_df.apply(partial(get_AB, state['fitting_penalty'], pileup_length), axis=1)
-
+    pileup_start = pileup_df.iloc[0].name
+    print(f'Process {os.getpid()}: Computing ABs for chromosome {chromosome}\n{pileup_length} rows to go..')
+    AB_df[var_columns] = pileup_df.apply(partial(get_AB, state['fitting_penalty'], pileup_length, pileup_start), axis=1)
+    print(f'Process {os.getpid()}: Computing ABs for chromosome {chromosome} finished.')
     ######################## OUTPUT ####################################################
     if chromosome != 'all_chromosomes' and state['debug_mode']: 
         # for multithreading also output the sub_files

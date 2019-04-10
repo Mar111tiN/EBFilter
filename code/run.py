@@ -79,7 +79,7 @@ def main(args, state):
                 # read in the AB_df for the different chromosomes or total
                 #AB_df = pd.read_csv('')
 
-            out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
+                out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
 
 
         else: # multi-threading mode
