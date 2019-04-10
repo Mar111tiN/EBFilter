@@ -29,19 +29,27 @@ def main(args, state):
     # generate cache
     if args['generate_cache']:
         if 'cache_path' in args.keys():
-            cache_file = args['cache_path']
+            cache_folder = os.path.dirname(args['cache_path'])
+            if not os.path.isdir(cache_folder):
+                os.mkdir(cache_folder)
+            cache_ext = os.path.splitext(args['cache_path'])[1]
+            if cache_ext == '':
+                state['cache_name'] = args['cache_path'] + '.cache'
+            state['cache_name'] = args['cache_path']
         else:
             # if no path to cache file is given, it will be generated at pon_list destination
-            cache_file = os.path.join(os.path.splitext(args['pon_list'])[0], '.ABcache')
-        state['cache_dir'] = os.path.dirname(cache_file)
+            state['cache_name'] = os.path.splitext(args['cache_path'])[0] + '.cache'
+
         pon_list = validate_pon(args['pon_list'])
         return generate_cache(pon_list, state)
+
+
     else: # EBscore mode
         if 'cache_path' in args.keys():
             cache_file = validate(args['cache_path'], "No ABcache file found")
             state['cache_mode'] = True
-        else:
-            pon_list = validate_pon(args['pon_list'])            
+
+    pon_list = validate_pon(args['pon_list'])            
         
     # get arguments for EBscore 
     sep = state['sep']
@@ -65,9 +73,22 @@ def main(args, state):
 
         if threads == 1:
         # non multi-threading mode
+            if state['cache_mode']:
+                # do multi-threaded merging of the different AB_files per chromosome
+                #AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
+                # read in the AB_df for the different chromosomes or total
+                #AB_df = pd.read_csv('')
+
             out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
 
+
         else: # multi-threading mode
+            if state['cache_mode']:
+                # do multi-threaded merging of the different AB_files per chromosome
+                AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
+                # read in the AB_df for the different chromosomes or total
+                AB_df = pd.read_csv('')
+
             mut_split = np.array_split(mut_df, threads)
             # create partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
             anno_partial = partial(anno.worker, tumor_bam, pon_list, output_path, region, state)

@@ -4,18 +4,27 @@ import csv
 import re
 import pandas as pd
 from functools import partial
-from subprocess import POPEN, PIPE, DEVNULL
+from subprocess import Popen, PIPE, DEVNULL
+from io import StringIO
+
+################## GLOBALS #############################################
+# regexps for start/end sign
+sign_re = re.compile(r'\^.|\$')
+# regexps for indels with a group for getting indel length
+indel_simple = re.compile(r'[\+\-]([0-9]+)')
+region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
 
 def validate_region(region):
     '''
     returns True if region 
     '''
-    region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
+    
     # region format check
     if region:
         region_match = region_exp.match(region)
         if region_match:
             return True
+
 
 def validate(file, message):
     '''
@@ -105,14 +114,19 @@ def make_region_list(mut_df, out_path, threads):
     return outpath    
 
 
+def clean_read_column(read_series):
+        '''
+        removes per column all reads with start/end signs
+        '''
+        # should include indel removal as well?
+
+        return read_series.str.replace(sign_re, '')
+
 def clean_up_df(mut_df, pon_count):
     '''
     removes indels and start/end signs from pileup data
     '''
-    # regexps for start/end sign
-    sign_re = re.compile(r'\^.|\$')
-    # regexps for indels with a group for getting indel length
-    indel_simple = re.compile(r'[\+\-]([0-9]+)')
+
     # globally remove start/end signs
     for i in range(pon_count+1):
         read = f"read{i}"

@@ -11,13 +11,13 @@ indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_exp = re.compile(r'^([^ \t\n\r\f\v,]+):([0-9]+)\-([0-9]+)')
 
 
-def get_count_df_snp(row, start_col):
+def get_count_df_snp(row, var, start_col):
     '''
     extracts the read_count matrix from each compound data frame row
     read/Q/[0] is target
     ___[1:] are control counts
     '''
-    var = row['Alt'].upper()
+
     matrix = pd.DataFrame()
     matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG]')
     matrix['mm_p'] = row.iloc[start_col:3].str.count(var)
@@ -47,8 +47,10 @@ def get_EB_score(pen, row):
     p is penality to use as soft constraints during parameter fitting
     """
     # convert the row into a count matrix for depth and mismatch over reads
+    
     if (row['Ref'] == '-') or row['Alt'] == '-':
-        count_df = get_count_df_indels(row, 6)
+        var = row['Alt'].upper()
+        count_df = get_count_df_indels(row, var, 6)
     else:
         count_df = get_count_df_snp(row, 6)
 
