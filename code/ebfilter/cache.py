@@ -112,7 +112,7 @@ def pileup2AB(state, chromosome, pileup_df):
             print(f"Process {os.getpid()}: {round((int(row.name) -start)/ length * 100, 1)}% ({row.name - start} lines) processed..")
         for var in acgt:
             # get the count matrix
-            count_df = get_count_df_snp(row, var, 4)
+            count_df = get_count_df_snp(row, var, 3)
             # get the AB parameters for 
             bb_params = fit_beta_binomial(count_df, penalty)
         # dump the different parameters into bb_s
@@ -132,10 +132,7 @@ def pileup2AB(state, chromosome, pileup_df):
     ######################## OUTPUT ####################################################
     if chromosome != 'all_chromosomes' and state['debug_mode']: 
         # for multithreading also output the sub_files
-        chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}_{os.getpid()}{os.path.splitext(state['cache_name'])[1]}"
-        i = 1
-        while os.path.isfile(chr_cache):
-            chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{i}{os.path.splitext(state['cache_name'])[1]}"
+        chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}_{os.getpid()}.{os.path.splitext(state['cache_name'])[1]}"
         AB_df.to_csv(chr_cache, sep=',', index=False)
 
     return AB_df
@@ -183,7 +180,7 @@ def generate_cache(pon_list, state):
             chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}.{os.path.splitext(state['cache_name'])[1]}"
             AB_df.to_csv(chr_cache, sep=',', index=False)
 
-        AB_df = pd.concat(AB_dfs).sort_values([AB_dfs.columns[0], AB_dfs.columns[1]])
+        AB_df = pd.concat(AB_dfs).sort_values([out_df.columns[0], out_df.columns[1]])
         AB_df.to_csv(state['cache_name'], sep=',', index=False)
 
         # AB_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
