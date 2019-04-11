@@ -196,12 +196,15 @@ def generate_cache(pon_list, state):
         
         AB_dfs = []
         # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
-        # go through each chromosome with all threads
+        # go through each chromosome with required number of threads
+        # create the job pool for the threads
         for pileup_dict in filter(None, pileup_dicts):  # account for empty pileups with filter(None..
             chromosome = pileup_dict['chr']
             chr_len = len(pileup_dict['df'].index)      # get length for progress info
-            # split 
-            pileup_split = np.array_split(pileup_dict['df'], threads)
+            # set the minimum number of lines for one thread to 10000
+            split_factor = min(math.floor(chr_len / 10000), threads)
+            # split the arrays into litte fractions for computation 
+            pileup_split = np.array_split(pileup_dict['df'], split_factor)
             pileup2AB_pool = Pool(threads)
             AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, state, chromosome, chr_len), pileup_split)
             pileup2AB_pool.close()
