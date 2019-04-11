@@ -111,7 +111,7 @@ def pileup2AB(state, chromosome, chr_len, pileup_df):
         if (row.name - start) % 1000 == 0 and (row.name - start) > 0:
             half_perc = math.floor((int(row.name) - start)/ length * 50)
             progress = '|' + '.' * half_perc + ' ' * (50 - half_perc) + '|'
-            print(f"Process {os.getpid()}: {row.name - start} lines ({2*half_perc}% ) processed\t {progress}")
+            print(f"P{os.getpid()}: {row.name - start} lines ({2*half_perc}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
         for var in acgt:
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
@@ -198,7 +198,7 @@ def generate_cache(pon_list, state):
             pileup2AB_pool.join()
             # concatenate the AB_dfs for each chromosome to AB_chr_df
             AB_chr_df = pd.concat(AB_chr_dfs)
-            AB_dfs.append(AB_chr_df.sort_values([out_df.columns[0], out_df.columns[1]]))
+            AB_dfs.append(AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]]))
 
             ############### OUTPUT ###########################################################
             chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}.{os.path.splitext(state['cache_name'])[1]}"
@@ -220,4 +220,3 @@ def generate_cache(pon_list, state):
     AB_df.to_csv(state['cache_name'], sep=',', index=False)
 
     return 'Generation of AB file finished.'
-
