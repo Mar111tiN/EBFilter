@@ -3,5 +3,9 @@ output
 .ipynb_checkpoints
 testinput
 test
-**/__pycache__
+testdata2
+**/__pycache__/
 *.pyc
+*.pyo
+build/
+dist/
