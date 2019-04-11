@@ -30,7 +30,7 @@ def sort_chr(dict):
     '''
     sorts all types of chromosome lists
     '''
-    chr = dict.replace('Chr', '').replace('chr', '')
+    chr = dict['chr'].replace('Chr', '').replace('chr', '')
     assigner = {'X':50, 'Y':60, 'M':70, '*':80}
     try:
         chr = int(chr)
@@ -39,7 +39,6 @@ def sort_chr(dict):
             chr = assigner[chr]
         else:
             chr = 100
-
     return chr
 
 
