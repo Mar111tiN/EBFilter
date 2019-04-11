@@ -17,7 +17,6 @@ def get_count_df_snp(row, var, start_col):
     read/Q/[0] is target
     ___[1:] are control counts
     '''
-
     matrix = pd.DataFrame()
     matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG]')
     matrix['mm_p'] = row.iloc[start_col::3].str.count(var)
@@ -33,10 +32,11 @@ def get_count_df_indels(row, start_col):
     ___[1:] are control counts
     '''
     matrix = pd.DataFrame()
-    matrix['depth_p'] = row.iloc[start_col:3].str.count(r'[ACTG\-]')
-    matrix['mm_p'] = row.iloc[start_col:3].str.count('-')
-    matrix['depth_n'] = row.iloc[start_col:3].str.count(r'[actg_]')
-    matrix['mm_n'] = row.iloc[start_col:3].str.count('_')
+
+    matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG\-]')
+    matrix['mm_p'] = row.iloc[start_col::3].str.count('-')
+    matrix['depth_n'] = row.iloc[start_col::3].str.count(r'[actg_]')
+    matrix['mm_n'] = row.iloc[start_col::3].str.count('_')
     return matrix
 
 
@@ -49,10 +49,10 @@ def get_EB_score(pen, row):
     # convert the row into a count matrix for depth and mismatch over reads
     
     if (row['Ref'] == '-') or row['Alt'] == '-':
-        var = row['Alt'].upper()
-        count_df = get_count_df_indels(row, var, 6)
+        count_df = get_count_df_indels(row, 6)
     else:
-        count_df = get_count_df_snp(row, 6)
+        var = row['Alt'].upper()
+        count_df = get_count_df_snp(row, var, 6)
 
     ############ FITTING ####################################
     # get the respective control matrices (as dataframe) for positive and negative strands

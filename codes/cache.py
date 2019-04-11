@@ -109,9 +109,9 @@ def pileup2AB(state, chromosome, chr_len, pileup_df):
     def get_AB(penalty, length, start, chromosome, row):
         bb_s = pd.Series()
         if (row.name - start) % 1000 == 0 and (row.name - start) > 0:
-            half_perc = round((int(row.name) -start)/ length * 50, 0)
+            half_perc = math.floor((int(row.name) - start)/ length * 50)
             progress = '|' + '.' * half_perc + ' ' * (50 - half_perc) + '|'
-            print(f"Process {os.getpid()}: {row.name - start} lines ({2*perc}% ) processed\t {progess}")
+            print(f"Process {os.getpid()}: {row.name - start} lines ({2*half_perc}% ) processed\t {progress}")
         for var in acgt:
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
@@ -173,22 +173,9 @@ def generate_cache(pon_list, state):
         # threads are mapped to the pool of chromosomes
         # returns a dict {'df':pileup_df, 'chr': 'chr1'}
         pileup_dicts = cache_pool.map(partial(pon2pileup, pon_list, state, pon_folder), chromosomes)
-        # sort the dict list by Chr
 
-        def sort_chr(dict):
-            chr = dict['chr'].replace('Chr', '').replace('chr', '')
-            assigner = {'X':50, 'Y':60, 'M':70, '*':80}
-            try:
-                sort_key = int(chr)
-            except ValueError:
-                if chr in ['X', 'Y', 'M', '*']
-                    chr = assigner['chr']
-                else:
-                    chr = 100
-            return chr
-
-        # sort the chromosomes
-        pileup_dicts = sorted(pileup_dicts, key=sort_chr)
+        # remove Nones and sort for chromosome name
+        pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
         cache_pool.close()
         cache_pool.join()
 
@@ -198,7 +185,7 @@ def generate_cache(pon_list, state):
         # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
         # go through each chromosome with required number of threads
         # create the job pool for the threads
-        for pileup_dict in filter(None, pileup_dicts):  # account for empty pileups with filter(None..
+        for pileup_dict in pileup_dicts:  # account for empty pileups with filter(None..
             chromosome = pileup_dict['chr']
             chr_len = len(pileup_dict['df'].index)      # get length for progress info
             # set the minimum number of lines for one thread to 10000

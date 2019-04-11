@@ -90,11 +90,12 @@ def main(args, state):
                 # read in the AB_df for the different chromosomes or total
                 AB_df = pd.read_csv('')
 
-            mut_split = np.array_split(mut_df, threads)
-            # create partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
-            anno_partial = partial(anno.worker, tumor_bam, pon_list, output_path, region, state)
+            #  setup the processor pool
             anno_pool = Pool(threads)
-            out_dfs = anno_pool.map(anno_partial, mut_split)  # mut_split is the iterable df_pool
+            # mut_split is the argument pool for anno_pool
+            mut_split = np.array_split(mut_df, threads)
+            # run partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
+            out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_list, output_path, region, state), mut_split)  # mut_split is the iterable df_pool
             anno_pool.close()
             anno_pool.join()
             out_df = pd.concat(out_dfs)
