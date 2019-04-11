@@ -10,7 +10,7 @@ This fork features:
 + dependencies are found in env/eb-env.yml
 + optimally used in conda environment:
   * `$ conda env create -f env/eb-env.yml -m <your_env_name>`
-+ alternatively, install python=3.7 samtools pandas numpy scipy vcf
++ alternatively, install python=3.7 samtools pandas numpy scipy pyvcf
 + for jupyter notebook, install jupyter 
   
 ## usage
