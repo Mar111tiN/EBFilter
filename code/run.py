@@ -41,8 +41,9 @@ def main(args, state):
             state['cache_name'] = os.path.splitext(args['cache_path'])[0] + '.cache'
 
         pon_list = validate_pon(args['pon_list'])
-        return generate_cache(pon_list, state)
-
+        success = generate_cache(pon_list, state)
+        print(success)
+        return
 
     else: # EBscore mode
         if 'cache_path' in args.keys():

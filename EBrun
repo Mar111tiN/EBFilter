@@ -17,16 +17,13 @@ parser.add_argument("controlBamPathList", metavar = "controlBam_list.txt", type 
                           help = "the list of paths to control bam files (+ .bai)")
 
 parser.add_argument("output_path", metavar = "output.anno", type = str,
-                          help = "the path to the output")
+                          help = "the path to the final output with added EBscore columns")
 
 parser.add_argument("-log", metavar = "log.txt", type = str,
                           help = "the path to log file")
 
 parser.add_argument("-sep", metavar = "mut_file_separator", type = str,
-                          help = "the format for the annotation csv (, or \t)")
-
-parser.add_argument("-sep", metavar = "mut_file_separator", default=',', type = str,
-                          help = "the format for the annotation csv (, or \t)")
+                          help = "the separator for the annotation csv (, or \t)")
 
 parser.add_argument('-q', metavar = "mapping_qual_thres", default='20', type=int,
                     help = "threshold for mapping quality for calculating base counts")
@@ -42,7 +39,6 @@ parser.add_argument('-fit_with', metavar = "penalty_term_for_fitting", default='
 
 parser.add_argument('--ff', metavar = "filter_flags", default='UNMAP,SECONDARY,QCFAIL,DUP', type=str,
                     help = "skip reads with mask bits set")
-
 
 parser.add_argument("--region", default = '', type = str,
                     help = "restrict the chromosomal region for mutation. active only if loption is on")
@@ -69,5 +65,9 @@ filter_quals = ''
 for qual in range( 33, 33 + args.Q): 
     filter_quals += chr( qual ) 
 state['filter_quals'] = filter_quals
+
+
+# transfer the args attributes into dictionary for access by main()
+args_dict = vars(args)
 
 main(args, state)

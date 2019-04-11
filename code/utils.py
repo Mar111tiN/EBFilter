@@ -26,6 +26,23 @@ def validate_region(region):
             return True
 
 
+def sort_chr(dict):
+    '''
+    sorts all types of chromosome lists
+    '''
+    chr = dict.replace('Chr', '').replace('chr', '')
+    assigner = {'X':50, 'Y':60, 'M':70, '*':80}
+    try:
+        chr = int(chr)
+    except ValueError:
+        if chr in ['X', 'Y', 'M', '*']:
+            chr = assigner[chr]
+        else:
+            chr = 100
+
+    return chr
+
+
 def validate(file, message):
     '''
     file existence checks

@@ -20,9 +20,9 @@ def get_count_df_snp(row, var, start_col):
 
     matrix = pd.DataFrame()
     matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG]')
-    matrix['mm_p'] = row.iloc[start_col:3].str.count(var)
-    matrix['depth_n'] = row.iloc[start_col:3].str.count(r'[actg]')
-    matrix['mm_n'] = row.iloc[start_col:3].str.count(var.lower())
+    matrix['mm_p'] = row.iloc[start_col::3].str.count(var)
+    matrix['depth_n'] = row.iloc[start_col::3].str.count(r'[actg]')
+    matrix['mm_n'] = row.iloc[start_col::3].str.count(var.lower())
     return matrix
 
 
