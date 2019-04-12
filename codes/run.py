@@ -9,82 +9,89 @@ import multiprocessing
 from multiprocessing import Pool
 from functools import partial
 
-from .utils import validate, read_anno_csv, validate_bam, validate_pon
+from .utils import validate, read_anno_csv, validate_bam, validate_pon, validate_cache
 from . import anno
 from . import vcf
 from .cache import generate_cache
 
 
 
-def main(args, state):
+def main(args, config):
     '''
     validates files and refers to respective functions
     '''
+    
 
-    state['cache_mode'] = False
-    ############### ARGUMENTS #######################
-    threads = state['threads']
-    debug_mode = state['debug_mode']
+    ############### ARGUMENTS and CONFIG ##################################
+    config['cache_mode'] = False
+    generate_cache = args['generate_cache'] if 'generate_cache' in args.keys() else False
+    config['cache_folder'] = cache_folder = args['use_cache'] if 'use_cache' in args.keys() else None
+    config['bed_file'] = args['bed_file'] if 'bed_files' in args.keys() else None
+    threads = config['threads']
+    debug_mode = config['debug_mode']
 
-    # generate cache
+
+    ##################### --> GENERATE CACHE ###################
     if args['generate_cache']:
-        if 'cache_path' in args.keys():
-            cache_folder = os.path.dirname(args['cache_path'])
-            if not os.path.isdir(cache_folder):
-                os.mkdir(cache_folder)
-            cache_ext = os.path.splitext(args['cache_path'])[1]
-            if cache_ext == '':
-                state['cache_name'] = args['cache_path'] + '.cache'
-            state['cache_name'] = args['cache_path']
-        else:
-            # if no path to cache file is given, it will be generated at pon_list destination
-            state['cache_name'] = os.path.splitext(args['cache_path'])[0] + '.cache'
+        ###### set cache folder #########################
+        
+        if not os.path.isdir(cache_folder):
+            os.mkdir(cache_folder)
 
+        ###### set bed file #########################
+        if not args['bed_file']:
+            if not args['force_caching']:
+                sys.stderr.write('''
+                    Please provide a bed_file or use -force caching option!\n
+                    Generating a cache file for the entire genomic stretch covered by the PoN potentially takes forever!!
+                    ''')
+                sys.exit(1)
         pon_list = validate_pon(args['pon_list'])
-        success = generate_cache(pon_list, state)
+        success = generate_cache(pon_list, config)
         print(success)
         return
 
     else: # EBscore mode
-        if 'cache_path' in args.keys():
-            cache_file = validate(args['cache_path'], "No ABcache file found")
-            state['cache_mode'] = True
+        if config['cache_folder']:
+            cache_folder = validate_cache(config['cache_folder'])
+            config['cache_mode'] = True
 
     pon_list = validate_pon(args['pon_list'])            
         
     # get arguments for EBscore 
-    sep = state['sep']
+    sep = config['sep']
     mut_file = validate(args['mut_file'], "No target mutation file")
+    print('mutfile: ', mut_file )
     tumor_bam = validate_bam(args['tumor_bam'])
     output_path = args['output_path']   
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
-    region = args['region']
+    region = args['region'] if 'region' in args.keys() else ''
 
     # create log directory - remove in snakemake
-    log_folder = os.path.split(state['log'])[0]
+    log_folder = os.path.split(config['log'])[0]
     if not os.path.exists(log_folder) or os.path.isfile(log_folder):
         os.makedirs(log_folder)
     
 
     if is_anno:
         # create dataframe (maybe more options for other input file formats)
-        anno_df, original_columns = read_anno_csv(mut_file, state)
+        anno_df, original_columns = read_anno_csv(mut_file, config)
         # create small copy for working with
         mut_df = anno_df[anno_df.columns[:5]].copy()
 
         if threads == 1:
         # non multi-threading mode
-            if state['cache_mode']:
+            if config['cache_mode']:
                 # do multi-threaded merging of the different AB_files per chromosome
                 #AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
                 # read in the AB_df for the different chromosomes or total
                 #AB_df = pd.read_csv('')
 
-                out_df = anno.worker(tumor_bam, pon_list, output_path, region, state, mut_df) # -1 means single-threaded
+                out_df = anno.worker(tumor_bam, pon_list, output_path, region, config, mut_df) # -1 means single-threaded
 
 
         else: # multi-threading mode
-            if state['cache_mode']:
+            if config['cache_mode']:
                 # do multi-threaded merging of the different AB_files per chromosome
                 AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
                 # read in the AB_df for the different chromosomes or total
@@ -95,7 +102,7 @@ def main(args, state):
             # mut_split is the argument pool for anno_pool
             mut_split = np.array_split(mut_df, threads)
             # run partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
-            out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_list, output_path, region, state), mut_split)  # mut_split is the iterable df_pool
+            out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_list, output_path, region, config), mut_split)  # mut_split is the iterable df_pool
             anno_pool.close()
             anno_pool.join()
             out_df = pd.concat(out_dfs)
@@ -107,7 +114,7 @@ def main(args, state):
         final_df.to_csv(output_path, sep='\t', index=False)
 
         ################ DEBUG #####################################
-        if state['debug_mode']:
+        if config['debug_mode']:
             out_file = output_path.replace('eb', "eb_only")
             out_df.to_csv(out_file, sep=sep, index=False)
         ############################################################
@@ -116,7 +123,7 @@ def main(args, state):
         
     else: 
         if threads == 1:
-            vcf.worker(mut_file, tumor_bam, pon_list, output_path, region,state)
+            vcf.worker(mut_file, tumor_bam, pon_list, output_path, region, config)
             # delete intermediate files
         else:
             # partition vcf files

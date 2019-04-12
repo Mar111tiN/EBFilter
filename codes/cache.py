@@ -32,7 +32,7 @@ def split_bam(chromosome, pon_folder, pon_row):
     return bam_out
 
 ############# PILEUP2BAM ############################################
-def pon2pileup(pon_list, state, pon_folder, chromosome):
+def pon2pileup(pon_list, config, pon_folder, chromosome):
     '''
     create the dataframe of AB parameters per region per mismatch base
     '''
@@ -57,9 +57,15 @@ def pon2pileup(pon_list, state, pon_folder, chromosome):
 
     ############# PON2PILEUP ############################################
     # from the pon_list return a pileup_df
-    with open(state['log'], 'w+') as log:
-        mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(state['q']), "-Q", str(state['Q']), "--ff", state['ff']]
+    with open(config['log'], 'w+') as log:
+        # mpileup configs
+        mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q", str(config['Q']), "--ff", config['ff']]
+        # mpileup PoN list
         mpileup_cmd += ["-b", pon_sub_list]
+        # optional (but highly recommended:-) bed_file for -l option
+        if config['bed_file']:
+            mpileup_cmd += ["-l", config['bed_file']]
+
         pileup_stream = Popen(mpileup_cmd, stdout=PIPE, stderr=log)
         pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
         names = ['Chr', 'Start', 'Ref']
@@ -80,24 +86,24 @@ def pon2pileup(pon_list, state, pon_folder, chromosome):
     pileup_df[read_columns] = pileup_df[read_columns].apply(clean_read_column)
 
     ########## DEBUG ####################################
-    if state['debug_mode']:
+    if config['debug_mode']:
         # 
         pileup_file = 'cache'
-        if state['threads'] > 1:
+        if config['threads'] > 1:
             pileup_file += f"_{chromosome}"
         pileup_file += '.pileup'
-        pileup_folder = os.path.join(os.path.dirname(state['cache_name']), 'cache_pileups')
+        pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
 
         if not os.path.isdir(pileup_folder):
             os.mkdir(pileup_folder)
         pileup_path = os.path.join(pileup_folder, pileup_file)
-        # write the pileup df to csv as <cache_dir>/ab_cache[_chr1].pileup
+        # write the pileup df to csv as <cache_folder>/ab_cache[_chr1].pileup
         pileup_df.to_csv(pileup_path, sep='\t', index=False)
     #####################################################
     return {'df': pileup_df, 'chr': chromosome}
 
 
-def pileup2AB(state, chromosome, chr_len, pileup_df):
+def pileup2AB(config, chromosome, chr_len, pileup_df):
     '''
     creates the AB_df for a pileup
     '''
@@ -107,11 +113,18 @@ def pileup2AB(state, chromosome, chr_len, pileup_df):
     AB_df = pileup_df.iloc[:,[0,1]].copy()
 
     def get_AB(penalty, length, start, chromosome, row):
+        '''
+        returns the AB parameters (A+a A+b A-a A-b G+a G+b....) for each pileup row
+        '''
         bb_s = pd.Series()
+        ########### Progress Bar ###############################################
         if (row.name - start) % 1000 == 0 and (row.name - start) > 0:
-            half_perc = math.floor((int(row.name) - start)/ length * 50)
-            progress = '|' + '.' * half_perc + ' ' * (50 - half_perc) + '|'
-            print(f"P{os.getpid()}: {row.name - start} lines ({2*half_perc}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
+            bar_size = 25
+            perc = math.floor((int(row.name) - start)/ length * bar_size)
+            progress = '|' + '.' * math.floor(perc / 100 * bar_size) + ' ' * (bar_size - perc) + '|'
+            print(f"P{os.getpid()}: {row.name - start} lines (total {perc}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
+
+        ########### get count matrix ###########################################    
         for var in acgt:
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
@@ -125,44 +138,46 @@ def pileup2AB(state, chromosome, chr_len, pileup_df):
             bb_s[f'{var}-b'] = bb_params['n'][1]
         return bb_s
 
+    ################## Store AB data into df ####################################   
+    # create the columns (A+a A+b A-a A-b G+a G+b....) for the recipient df of the pileup_df apply function 
     var_columns = [f'{var}{strand}{param}' for var in acgt for strand in ['+', '-'] for param in ['a','b']]
     pileup_length = len(pileup_df.index)
     pileup_start = pileup_df.iloc[0].name
     print(f'Process {os.getpid()}: Computing ABs for Chr {chromosome} \t(lines {pileup_start }\t to \t{pileup_length + pileup_start})')
-    AB_df[var_columns] = pileup_df.apply(partial(get_AB, state['fitting_penalty'], pileup_length, pileup_start, chromosome), axis=1)
+    AB_df[var_columns] = pileup_df.apply(partial(get_AB, config['fitting_penalty'], pileup_length, pileup_start, chromosome), axis=1)
     print(f'Process {os.getpid()}: Computing ABs for chromosome {chromosome} \t(lines {pileup_start }\t to \t{pileup_length + pileup_start}) finished.')
 
     ###################### DEBUG #######################################################
-    if chromosome != 'all_chromosomes' and state['debug_mode']: 
+    if chromosome != 'all_chromosomes' and config['debug_mode']: 
         # for multithreading also output the sub_files in debug_mode
-        chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}_{os.getpid()}{os.path.splitext(state['cache_name'])[1]}"
+        chr_cache = os.path.join(config['cache_folder'], f"{chromosome}_{os.getpid()}.cache")
         i = 1
         while os.path.isfile(chr_cache):
-            chr_cache = f"{chr_cache}_{i}{os.path.splitext(state['cache_name'])[1]}"
+            chr_cache = os.path.join(config['cache_folder'], f"{chromosome}_{os.getpid()}-{i}.cache")
             i += 1
     ####################################################################################
 
     ######################## OUTPUT ####################################################
     else:
-        chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}{os.path.splitext(state['cache_name'])[1]}"
+        chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
     AB_df.to_csv(chr_cache, sep=',', index=False)
     return AB_df
 
-def generate_cache(pon_list, state):
+def generate_cache(pon_list, config):
     '''
     create a cache file for ab-parameters
     '''
 
     print('Generating Cache...')
-    threads = state['threads']
+    threads = config['threads']
     pon_df = pd.read_csv(pon_list)  
     if threads == 1:
-        pileup_dict = pon2pileup(pon_list, state, 'all_chromosomes')
-        AB_df = pileup2AB(state, 'all_chromosomes', pileup_dict['df'])
+        pileup_dict = pon2pileup(pon_list, config, 'all_chromosomes')
+        AB_df = pileup2AB(config, 'all_chromosomes', pileup_dict['df'])
     else: # multithreading
         ####################### SET TO FINAL OUTPUT ########################
         # make directory for temporary bam files
-        pon_folder = os.path.join(os.path.dirname(state['cache_name']), 'pon')
+        pon_folder = os.path.join(os.path.dirname(config['cache_folder']), 'pon')
         if not os.path.isdir(pon_folder):
             os.mkdir(pon_folder)
 
@@ -172,7 +187,7 @@ def generate_cache(pon_list, state):
         cache_pool = Pool(threads)
         # threads are mapped to the pool of chromosomes
         # returns a dict {'df':pileup_df, 'chr': 'chr1'}
-        pileup_dicts = cache_pool.map(partial(pon2pileup, pon_list, state, pon_folder), chromosomes)
+        pileup_dicts = cache_pool.map(partial(pon2pileup, pon_list, config, pon_folder), chromosomes)
 
         # remove Nones and sort for chromosome name
         pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
@@ -189,11 +204,11 @@ def generate_cache(pon_list, state):
             chromosome = pileup_dict['chr']
             chr_len = len(pileup_dict['df'].index)      # get length for progress info
             # set the minimum number of lines for one thread to 10000
-            split_factor = min(math.floor(chr_len / 10000), threads)
-            # split the arrays into litte fractions for computation 
+            split_factor = min(math.ceil(chr_len / 2000), threads)
+            # split the arrays into litte fractions for computation
             pileup_split = np.array_split(pileup_dict['df'], split_factor)
             pileup2AB_pool = Pool(threads)
-            AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, state, chromosome, chr_len), pileup_split)
+            AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, config, chromosome, chr_len), pileup_split)
             pileup2AB_pool.close()
             pileup2AB_pool.join()
             # concatenate the AB_dfs for each chromosome to AB_chr_df
@@ -201,22 +216,22 @@ def generate_cache(pon_list, state):
             AB_dfs.append(AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]]))
 
             ############### OUTPUT ###########################################################
-            chr_cache = f"{os.path.splitext(state['cache_name'])[0]}_{chromosome}.{os.path.splitext(state['cache_name'])[1]}"
+            chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
             print(f"Writing ABcache for Chr {chromosome} to file {chr_cache}.")
             AB_chr_df.to_csv(chr_cache, sep=',', index=False)
 
-
-        AB_df = pd.concat(AB_dfs).sort_values([AB_dfs.columns[0], AB_dfs.columns[1]])
-
+        AB_df = pd.concat(AB_dfs)
+        AB_df = AB_df.sort_values([AB_df.columns[0], AB_df.columns[1]])
         # AB_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
 
     ############# DEBUG #####################################################################
     # remove the pon_list and all bam files (by removing the whole pon folder)
-    if not state['debug_mode']:    
-        subprocess.check_call('rm', '-r', pon_folder)
+    if not config['debug_mode'] and threads > 1:    
+        subprocess.check_call(['rm', '-r', pon_folder])
     #########################################################################################   
 
-    print(f"Writing final ABcache for genome to file {state['cache_name']}.")
-    AB_df.to_csv(state['cache_name'], sep=',', index=False)
+    all_cache = os.path.join(config['cache_folder'], "all.cache")
+    print(f"Writing final ABcache for covered regions to file {all_cache}.")
+    AB_df.to_csv(all_cache, sep=',', index=False)
 
     return 'Generation of AB file finished.'

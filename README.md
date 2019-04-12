@@ -12,11 +12,23 @@ This fork features:
   * `$ conda env create -f env/eb-env.yml -m <your_env_name>`
   
 ## usage
-+ EBfilter is run from within python as follows:
-  * place code folder in your working folder
-  * for top-level placement import via `from code import run
++ within python code:
+  * `from ebfilter import run`
   * required arguments:
     * targetMutationFile: the .vcf or .anno containing the mutations
     * targetBamPath: path to the tumor bam file (+.bai)
     * controlBamPathList: text list of path to PoN bam files (+ .bai)
     * outputPath
+
+
+## testing
++ from CLI:
+  * run `$ EBscore -t 3 testdata/input.anno testdata/tumor.bam testdata/PoN_list.txt output/testdata_EB.csv`
+
+### cache mode
++ from CLI:
+  * generate the cache file: `$ makeEBcache -t 3 -bed_file testdata/input.bed testdata/list_normal_sample.txt output/testdata_cache`
+  * alternatively (but not recommended) generate the cache file for the entire region covered by the bam files in the PoN list:
+  * `$ makeEBcache -t 3 -force_caching testdata/PoN_list.txt output/testdata_cache`
+
+  * run EBscore using th
