@@ -76,7 +76,29 @@ def validate_pon(pon_list):
     return pon_list
 
 
-def read_anno_csv(mut_file, state):
+def validate_cache(cache_folder, pon_list):
+    '''
+    file existence check for cache folder and the containing cache files
+    '''
+    if not os.path.isdir(cache_folder):
+        sys.stderr.write(f"Cache folder {cache_folder} cannot be found! Exiting..")
+        sys.exit(1)        
+    chr_set = Set()
+    with open(pon_list) as file_list:
+        for file in file_list:
+            bam_file = file.rstrip()
+            chr_set.update(bam_to_chr_list(bam_file))
+    cache_files = [os.path.join(cache_folder, f"{chrom}.cache") for chrom in chr_set]
+    cache_files.append("all.cache")
+    for cache_file in cache_files:
+        if not os.path.isfile(cache_folder):
+            file_name = os.path.basename(cache_file)
+            sys.stderr.write(f"Cache file {file_name} cannot be found in folder {cache_folder}! Exiting..")
+            sys.exit(1)  
+    return cache_folder
+
+
+def read_anno_csv(mut_file, config):
     '''
     reads in the mutation file and resets the relevant header columns required for dataframe operations
     --> returns the dataframe and the original header names
@@ -95,8 +117,8 @@ def read_anno_csv(mut_file, state):
     with open(mut_file, 'r') as input_file:
         has_header = csv.Sniffer().has_header(input_file.read(1024))
 
-    sep = state['sep']
-    with open(state['log'],'w+') as log:
+    sep = config['sep']
+    with open(config['log'],'w+') as log:
         print(f'Loading annotation file {mut_file} into dataframe', file=log)
 
 
@@ -107,6 +129,11 @@ def read_anno_csv(mut_file, state):
             anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
         else:
             anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
+            row, col = anno_df.shape
+            print(row, col)
+            if col == 1:
+                sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
+                sys.exit(1)
             org_columns = None
             rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
             anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
@@ -203,7 +230,7 @@ def clean_up_df(mut_df, pon_count):
 
 def cleanup_badQ(mut_df, pon_count, filters):
     '''
-    removes base qualities below given threshold ( state['Q'] )..
+    removes base qualities below given threshold ( config['Q'] )..
         and corresponding read bases
     this function should be redundant as the -Q option..
         already applies during mpileup

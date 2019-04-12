@@ -8,45 +8,45 @@ from .utils import make_region_list, clean_up_df, cleanup_badQ
 import re
 from .eb import get_EB_score
 
-def worker(tumor_bam, pon_list, output_path, region, state, mut_df):
+def worker(tumor_bam, pon_list, output_path, region, config, mut_df):
 
     pon_count = sum(1 for line in open(pon_list, 'r'))
 
     ########### PANDAS IMPORT ################
     # mut_pd = pd.read_csv(mutfile, sep=',')
     # generate pileup files and store data in mut_df as 
-    mut_df = anno2pileup(mut_df, output_path, tumor_bam, pon_list, region, state)
+    mut_df = anno2pileup(mut_df, output_path, tumor_bam, pon_list, region, config)
 
     # in_place removal of indel traces and start/end signs in pileup data
     clean_up_df(mut_df, pon_count)
 
     # cleanup_badQ should not be necessary because these bases have been removed using mpileup -Q option (?)  
-    #cleanup_badQ(mut_df, pon_count, state['filter_quals'])
+    #cleanup_badQ(mut_df, pon_count, config['filter_quals'])
 
     ############# FOR DEBUGGING #######################
-    if state['debug_mode']:
+    if config['debug_mode']:
         out_file = output_path.replace('eb', "clean")
         mut_df.to_csv(out_file, sep='\t', index=False)
 
     ########### EB score ###############################
-    mut_df['EB_score'] = mut_df.apply(partial(get_EB_score, state['fitting_penalty']), axis=1)
+    mut_df['EB_score'] = mut_df.apply(partial(get_EB_score, config['fitting_penalty']), axis=1)
 
     # return minimal consensus df for merge with annotated df
     return mut_df.loc[:,['Chr', 'Start', 'EB_score']]
 
-def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
+def anno2pileup(mut_df, out_path, bam, pon_list, region, config):
     '''
     creates a pileup from all the entries in mut_df (the mutation dataframe) and stores the pileup data in mut_df
     '''
 
     # make region list for use in l_option of mpileup
-    bed_file = make_region_list(mut_df, out_path, state['threads']) # in utils --> out_1.region_list.bed
+    bed_file = make_region_list(mut_df, out_path, config['threads']) # in utils --> out_1.region_list.bed
     # get the numbers of control bams from the pon_list
     pon_count = sum(1 for line in open(pon_list, 'r'))
 
-    with open(state['log'], 'w+') as log:
+    with open(config['log'], 'w+') as log:
         # determine wether it is bam or pon      
-        mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q",str(state['q']), "-Q",str(state['Q']), "--ff",state['ff'], "-l", bed_file]
+        mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q",str(config['q']), "-Q",str(config['Q']), "--ff",config['ff'], "-l", bed_file]
         if region:
             mpileup_cmd = mpileup_cmd + ["-r", region]
 
@@ -79,7 +79,7 @@ def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
                 pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names=names).drop(columns='Ref')
 
             ############# FOR DEBUGGING #######################
-            if state['debug_mode']:
+            if config['debug_mode']:
                 out_file = bed_file.replace('region_list.bed', f"{out}.pileup")
                 pileup_df.to_csv(out_file, sep='\t', index=False)
 
@@ -87,7 +87,7 @@ def anno2pileup(mut_df, out_path, bam, pon_list, region, state):
             mut_df = pd.merge(left=mut_df, right=pileup_df, how='outer', on=['Chr', 'Start'], left_index=True)
 
     ############## FOR DEBUGGING #######################
-    if not state['debug_mode']:
+    if not config['debug_mode']:
         subprocess.check_call(["rm", bed_file])
     else:
         out_file = bed_file.replace('region_list.bed', f"{out}.merged.csv")

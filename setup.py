@@ -10,7 +10,7 @@ setup(name='ebfilter',
       url='https://github.com/Mar111tiN/EBFilter/',
       package_dir = {'': 'lib'},
       packages=['ebfilter'],
-      scripts=['EBrun'],
+      scripts=['EBscore', 'makeEBcache'],
       license='GPL-3'
      )
 
