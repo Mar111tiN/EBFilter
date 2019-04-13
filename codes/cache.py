@@ -32,22 +32,21 @@ def split_bam(chromosome, pon_folder, pon_row):
     return bam_out
 
 ############# PILEUP2BAM ############################################
-def pon2pileup(pon_list, config, pon_folder, chromosome):
+def pon2pileup(pon_dict, config, pon_folder, chromosome):
     '''
     create the dataframe of AB parameters per region per mismatch base
     '''
 
     # get the number of files in the pon_list
-    pon_count = sum(1 for line in open(pon_list, 'r'))
+    pon_count = len(pon_dict['df'].index)
 
     if chromosome != 'all_chromosomes': # multithreading
         # create a chromosome-bound bam and bai for each bam in the pon_list
         # write the created bams to a dataframe and output as pon_list
         print(f'Generating  pileup for chromosome {chromosome}..')
-        pon_df = pd.read_csv(pon_list, header=None)
         pon_sub_df = pd.DataFrame()
         print(f'Splitting bam files for chromosome {chromosome}..')
-        pon_sub_df['bam'] = pon_df.apply(partial(split_bam, chromosome, pon_folder), axis=1)
+        pon_sub_df['bam'] = pon_dict['df'].apply(partial(split_bam, chromosome, pon_folder), axis=1)
         # use pon_list_chr?.txt instead of the global pon_list.txt
         pon_sub_list = os.path.join(pon_folder, f"pon_list_{chromosome}.txt")
         # write the pon_list_{chr#} to file in output/pon for access by pon2pileup
@@ -116,13 +115,14 @@ def pileup2AB(config, chromosome, chr_len, pileup_df):
         '''
         returns the AB parameters (A+a A+b A-a A-b G+a G+b....) for each pileup row
         '''
+
         bb_s = pd.Series()
         ########### Progress Bar ###############################################
         if (row.name - start) % 1000 == 0 and (row.name - start) > 0:
             bar_size = 25
-            perc = math.floor((int(row.name) - start)/ length * bar_size)
-            progress = '|' + '.' * math.floor(perc / 100 * bar_size) + ' ' * (bar_size - perc) + '|'
-            print(f"P{os.getpid()}: {row.name - start} lines (total {perc}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
+            frac = (int(row.name) - start) / length
+            progress = '|' + '.' * math.floor(frac * bar_size) + ' ' * math.ceil(bar_size * (1 - frac)) + '|'
+            print(f"P{os.getpid()}: {row.name - start} lines (total {round(frac * 100, 1)}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
 
         ########### get count matrix ###########################################    
         for var in acgt:
@@ -163,16 +163,15 @@ def pileup2AB(config, chromosome, chr_len, pileup_df):
     AB_df.to_csv(chr_cache, sep=',', index=False)
     return AB_df
 
-def generate_cache(pon_list, config):
+def generate_cache(pon_dict, config):
     '''
     create a cache file for ab-parameters
     '''
 
     print('Generating Cache...')
     threads = config['threads']
-    pon_df = pd.read_csv(pon_list)  
     if threads == 1:
-        pileup_dict = pon2pileup(pon_list, config, 'all_chromosomes')
+        pileup_dict = pon2pileup(pon_dict, config, 'all_chromosomes')
         AB_df = pileup2AB(config, 'all_chromosomes', pileup_dict['df'])
     else: # multithreading
         ####################### SET TO FINAL OUTPUT ########################
@@ -183,11 +182,11 @@ def generate_cache(pon_list, config):
 
         ######################### PON2PILEUP ###################################
         # get the list of valid chromosomes from the first bam in the pon_list
-        chromosomes = bam_to_chr_list(pon_df.iloc[0,0])
+        chromosomes = bam_to_chr_list(pon_dict['df'].iloc[0,0])
         cache_pool = Pool(threads)
         # threads are mapped to the pool of chromosomes
         # returns a dict {'df':pileup_df, 'chr': 'chr1'}
-        pileup_dicts = cache_pool.map(partial(pon2pileup, pon_list, config, pon_folder), chromosomes)
+        pileup_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config, pon_folder), chromosomes)
 
         # remove Nones and sort for chromosome name
         pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)

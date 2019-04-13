@@ -76,7 +76,6 @@ config['filter_quals'] = filter_quals
 # transfer the args attributes into dictionary for access by main()
 args_dict = vars(args)
 args_dict['generate_cache'] = False
-config['log'] = args_dict['log'] if 'log' in args_dict.keys() else os.path.join(os.path.dirname(args_dict['output_path']), 'EBscore.log')
 
 main(args_dict, config)
 
