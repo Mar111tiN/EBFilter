@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from .utils import clean_up_df, cleanup_badQ, bam_to_chr_list, clean_read_column, sort_chr
 from .eb import get_count_df_snp
-from .beta_binomial import fit_beta_binomial
+from .beta_binomial import fit_beta_binomial, beta_binom_pvalues, fisher_combination
 import re
 import math
 
@@ -234,3 +234,60 @@ def generate_cache(pon_dict, config):
     AB_df.to_csv(all_cache, sep=',', index=False)
 
     return 'Generation of AB file finished.'
+
+def get_EBscore_from_AB(pen, row):
+    '''
+    get the EBscore from cached AB parameters
+    no fitting is needed as parameters are precomputed and stored in row[5:9]
+    '''
+
+    count_df = get_count_df_snp(row, row['Alt'].upper(), 9)
+    bb_params = {}
+    bb_params['p'] = [row['a+'], row['b+']]
+    bb_params['n'] = [row['a-'], row['b-']]
+
+    p_values = beta_binomial_pvalues(bb_params, target_df)
+
+    ############ FISHER COMBINATION #########################
+    # perform Fisher's combination methods for integrating two p-values of positive and negative strands
+    EB_pvalue = fisher_combination(p_values)
+    EB_score = 0
+    if EB_pvalue < 1e-60:
+        EB_score = 60
+    elif EB_pvalue > 1.0 - 1e-10:
+        EB_score = 0
+    else:
+        EB_score = -round(math.log10(EB_pvalue), 3)
+    return EB_score
+
+
+def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
+    '''
+    takes a shortened annotation file (snps only) and loads the valid AB parameters and gets the EB score for these lines
+    '''
+
+    ############################## GET THE AB parameters
+    cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
+    # the merger columns
+    cols = ['Chr', 'Start', 'Alt']
+    # load the file and set Chr and Start to index for proper setting of multi-index
+    AB_df = pd.read_csv(cache_file, sep=',').set_index(cols[:2]) 
+    AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
+    # set multi-indexed columns
+    AB_df.columns = AB_columns
+    # stack the var column level for merge with the snp_df
+    AB_df = AB_df.stack('var')
+    # reduce the column index level to 1
+    AB_df.columns = AB_df.columns.droplevel(0)
+    # rename columns for merge
+    AB_df.columns = cols + ['a+', 'b+', 'a-', 'b-']
+    snpAB_df = pd.merge(snpAB_df, AB_df, on=cols)
+    # set region list file_path
+    region_list = os.path.join(config['cache_folder'], chrom)
+    snpAB_df = anno2pileup(snp_AB_df, region_list, tumor_bam, None, None, config)
+    # remove start/end signs
+    clean_up_df(snpAB_df, 0)
+
+    snpAB_df['EB_score'] = snpAB_df.apply(partial(get_EBscore_from_AB, config['fitting_penalty'], axis=1))
+
+    return snpAB_df.loc[:,['Chr', 'Start', 'EB_score']]

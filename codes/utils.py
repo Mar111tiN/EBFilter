@@ -201,9 +201,6 @@ def clean_up_df(mut_df, pon_count):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], indel_length)
         return row
 
-    # apply partial clean_indels to remove indel traces in pileup
-    mut_df[is_indel] = mut_df[is_indel].apply(partial(clean_indels, pon_count), axis=1)
-    # in case there are indels only in the control files
     def clean_this_row(i, row):
         read = row[f"read{i}"]
         m = indel_simple.search(read)
@@ -213,14 +210,20 @@ def clean_up_df(mut_df, pon_count):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], length)
         return row
 
-    for i in range(pon_count):        
-        read = f"read{i+1}"
-        Q = f"Q{i+1}"
-        # boolean mask for non-fitting read-Q-pairs
-        not_paired = mut_df[read].str.len() != mut_df[Q].str.len()
-        wrong_rows = mut_df[not_paired]
-        if len(wrong_rows.index):
-            mut_df[not_paired] = wrong_rows.apply(partial(clean_this_row, i+1), axis=1)
+    # only clean up other columns if pon pileup is used (non cache_mode)
+    if not config['cache_mode']:
+    # apply partial clean_indels to remove indel traces in pileup
+        mut_df[is_indel] = mut_df[is_indel].apply(partial(clean_indels, pon_count), axis=1)
+    # in case there are indels only in the control files
+
+        for i in range(pon_count):        
+            read = f"read{i+1}"
+            Q = f"Q{i+1}"
+            # boolean mask for non-fitting read-Q-pairs
+            not_paired = mut_df[read].str.len() != mut_df[Q].str.len()
+            wrong_rows = mut_df[not_paired]
+            if len(wrong_rows.index):
+                mut_df[not_paired] = wrong_rows.apply(partial(clean_this_row, i+1), axis=1)
     return mut_df
 
 
