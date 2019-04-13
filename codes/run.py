@@ -9,7 +9,7 @@ import multiprocessing
 from multiprocessing import Pool
 from functools import partial
 
-from .utils import validate, read_anno_csv, validate_bam, validate_pon, validate_cache
+from .utils import validate, read_anno_csv, validate_bam, validate_pon, validate_cache, bam_to_chr_list
 from . import anno
 from . import vcf
 from .cache import generate_cache
@@ -81,40 +81,39 @@ def main(args, config):
         # create small copy for working with
         mut_df = anno_df[anno_df.columns[:5]].copy()
 
-        if threads == 1:
-        ############### ANNO SINGLE THREAD ###############
-            if config['cache_mode']:
-                # do multi-threaded merging of the different AB_files per chromosome
-                #AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
-                # read in the AB_df for the different chromosomes or total
-                #AB_df = pd.read_csv('')
+        ############### CACHE MODE ###############
+        EBcached_outputs = []
+        if config['cache_mode']:
+            # do multi-threaded merging of the different AB_files per chromosome
+            # get the SNPs for the annotation
+            snp_df = mut_df.query('not (Ref == "-" or Alt == "-")')
 
-                out_df = anno.worker(tumor_bam, pon_dict, output_path, region, config, mut_df) # -1 means single-threaded
-
-        else: # multi-threading mode
-            if config['cache_mode']:
-                # do multi-threaded merging of the different AB_files per chromosome
-                AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
-                
-                
-                AB_chr = []
-                # read in the AB_df for the different chromosomes
-
+            # reduce mut_df to the remaining indel occurrences
+            mut_df = mut_df.query('Ref == "-" or Alt == "-"')
+            # get the valid chromosomes
+            chromosomes = bam_to_chr_list(pon_dict['df'].iloc[0,0])
+            # init multicore
+            getEB_pool = Pool(threads)
+            # threads are mapped to the pool of chromosomes
+            mut_EBs = getEB_pool.map(partial(get_EB_from_cache, snp_df, tumor_bam, config), chromosomes)
+            # EBcached_outputs will be concatenated with the annoworker dfs
+            EBcached_outputs = mut_EBs
 
 
+        #  setup the processor pool
+        anno_pool = Pool(threads)
+        # mut_split is the argument pool for anno_pool
+        mut_split = np.array_split(mut_df, threads)
+        # run partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
+        out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_dict, output_path, region, config), mut_split)  # mut_split is the iterable df_pool
+        anno_pool.close()
+        anno_pool.join()
+        # add the output from EBcached to the other output
+        out_dfs += EBcached_outputs
+        out_df = pd.concat(out_dfs)
+        out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
 
-
-            #  setup the processor pool
-            anno_pool = Pool(threads)
-            # mut_split is the argument pool for anno_pool
-            mut_split = np.array_split(mut_df, threads)
-            # run partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
-            out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_dict, output_path, region, config), mut_split)  # mut_split is the iterable df_pool
-            anno_pool.close()
-            anno_pool.join()
-            out_df = pd.concat(out_dfs)
-            out_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
-
+        # add the original columns back to the annotation file
         final_df = pd.merge(left=anno_df, right=out_df, how='outer', on=['Chr', 'Start'])
         if original_columns is not None:
             final_df.columns = list(original_columns) + ['EB_score']

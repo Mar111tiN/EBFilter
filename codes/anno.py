@@ -14,7 +14,7 @@ def worker(tumor_bam, pon_dict, output_path, region, config, mut_df):
 
     ########### PANDAS IMPORT ################
     # mut_pd = pd.read_csv(mutfile, sep=',')
-    # generate pileup files and store data in mut_df as 
+    # generate pileup files and store data in mut_df
     mut_df = anno2pileup(mut_df, output_path, tumor_bam, pon_dict, region, config)
 
     # in_place removal of indel traces and start/end signs in pileup data
@@ -39,11 +39,8 @@ def anno2pileup(mut_df, out_path, bam, pon_dict, region, config):
     creates a pileup from all the entries in mut_df (the mutation dataframe) and stores the pileup data in mut_df
     '''
 
-    # make region list for use in l_option of mpileup
+    # make region list for use in l_option of mpileup (sets position offset)
     bed_file = make_region_list(mut_df, out_path, config['threads']) # in utils --> out_1.region_list.bed
-    # get the numbers of control bams from the pon_list
-    pon_count = len(pon_dict['df'].index)
-
 
     # determine wether it is bam or pon      
     mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q",str(config['q']), "-Q",str(config['Q']), "--ff",config['ff'], "-l", bed_file]
@@ -58,10 +55,17 @@ def anno2pileup(mut_df, out_path, bam, pon_dict, region, config):
     #   - execute subprocess with Popen and store stream into pileup_df
     #   - merge to mut_df (everything in one big dataframe)
     #   - 
-    for out in ['target', 'control']:
+    # 
+    # in cache_mode, only pileup the target
+    pileup_for = ['target']
+    if not config['cache_mode']:
+        pileup_for += ['control']
+    for out in pileup_for:
         if 'target' in out:                     # pileup from bam file
             mpileup_cmd += [bam]
         else:
+            # get the numbers of control bams from the pon_list
+            pon_count = len(pon_dict['df'].index)
             mpileup_cmd += ["-b", pon_dict['list']]   # pileup from pon_list
         pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
         pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
