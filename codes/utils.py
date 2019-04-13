@@ -68,12 +68,10 @@ def validate_pon(pon_list):
     '''
     file existence check for pon_list and the containing bam (and bai) files
     '''
-    validate(pon_list, "No control list file")
-    with open(pon_list) as file_list:
-        for file in file_list:
-            bam_file = file.rstrip()
-            validate_bam(bam_file)
-    return pon_list
+    
+    pon_df = pd.read_csv(validate(pon_list, "No control list file"), header=None)
+    pon_df[0].apply(validate_bam)
+    return {'list': pon_list, 'df': pon_df}
 
 
 def validate_cache(cache_folder, pon_list):
@@ -104,6 +102,7 @@ def read_anno_csv(mut_file, config):
     --> returns the dataframe and the original header names
     if no header is detected, the relevant files are names as needed and additional columns are named other1, other2,...
     '''
+
     def to_int(Chr_name):
         '''
         converts all number chromosomes to int
@@ -118,26 +117,23 @@ def read_anno_csv(mut_file, config):
         has_header = csv.Sniffer().has_header(input_file.read(1024))
 
     sep = config['sep']
-    with open(config['log'],'w+') as log:
-        print(f'Loading annotation file {mut_file} into dataframe', file=log)
+    print(f'Loading annotation file {mut_file} into dataframe')
 
-
-        if has_header:
-            print(f'Header detected', file=log)
-            anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
-            org_columns = anno_df.columns
-            anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
-        else:
-            anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
-            row, col = anno_df.shape
-            print(row, col)
-            if col == 1:
-                sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
-                sys.exit(1)
-            org_columns = None
-            rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
-            anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
-            print(f'Adding header: Chr\tStart\tEnd\tRef\tAlt\tother1...', file=log)
+    if has_header:
+        print(f'Header detected')
+        anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
+        org_columns = anno_df.columns
+        anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
+    else:
+        anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
+        row, col = anno_df.shape
+        if col == 1:
+            sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
+            sys.exit(1)
+        org_columns = None
+        rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
+        anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
+        print(f'Adding header: Chr\tStart\tEnd\tRef\tAlt\tother1...')
     return (anno_df.sort_values(['Chr', 'Start']), org_columns)
 
 
