@@ -22,12 +22,15 @@ parser.add_argument("pon_list", metavar = "PoN.txt", type = str,
 parser.add_argument("cache_folder", metavar = "EB_cache_folder", type = str, 
                     help = "the path to the folder for storing the cache files")
 
-################################## OPTIONAL FILES ###################################################
+################################## OPTIONAL ###################################################
+
+parser.add_argument("-chromosome", metavar = "chromosome", type = str, default=None, 
+                    help = "restrict the analysis to a certain chromosome")
 
 parser.add_argument("-bed_file", metavar = "bed_file.bed", type = str, default=None, 
                     help = "the path to bed file used on the bams in the PoN list (-l option for mpileup)")
 
-parser.add_argument("-force_caching", metavar = "force_caching", type = str, default=False, 
+parser.add_argument("-force_caching", metavar = "force_caching", type = bool, default=False, 
                     help = "if true, a cache file is generate for the entire genome covered by the PoN - potentially takes ages!!")
 
 ################################## PILEUP PARAMS ############################################

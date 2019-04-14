@@ -18,7 +18,7 @@ def worker(tumor_bam, pon_dict, output_path, region, config, mut_df):
     mut_df = anno2pileup(mut_df, output_path, tumor_bam, pon_dict, region, config)
 
     # in_place removal of indel traces and start/end signs in pileup data
-    clean_up_df(mut_df, pon_count)
+    clean_up_df(mut_df, pon_count, config)
 
     # cleanup_badQ should not be necessary because these bases have been removed using mpileup -Q option (?)  
     #cleanup_badQ(mut_df, pon_count, config['filter_quals'])

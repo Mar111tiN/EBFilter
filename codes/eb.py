@@ -3,7 +3,7 @@ import numpy as np
 import re
 import sys
 import math
-from .beta_binomial import fit_beta_binomial, beta_binom_pvalues, fisher_combination
+from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
 
 
 sign_re = re.compile(r'\^.|\$')
@@ -31,7 +31,7 @@ def get_count_df_indels(row, start_col):
     read/Q/[0] is target
     ___[1:] are control counts
     '''
-    matrix = pd.DataFrame()
+    matrix = pd.DataFrae()
 
     matrix['depth_p'] = row.iloc[start_col::3].str.count(r'[ACTG\-]')
     matrix['mm_p'] = row.iloc[start_col::3].str.count('-')
@@ -58,13 +58,13 @@ def get_EB_score(pen, row):
     # get the respective control matrices (as dataframe) for positive and negative strands
     control_df = count_df.loc['read1':]
     # estimate the beta-binomial parameters for positive and negative strands  
-    bb_params = fit_beta_binomial(control_df, pen)
+    bb_params = fit_bb(control_df, pen)
 
     ########## USING FIT ON TARGET ##########################
     # get the respective target matrix (as dataframe) for positive and negative strands
     target_df = count_df.loc['read0']
     # evaluate the p-values of target mismatch numbers for positive and negative strands
-    p_values = beta_binom_pvalues(bb_params, target_df)
+    p_values = bb_pvalues(bb_params, target_df)
 
     ############ FISHER COMBINATION #########################
     # perform Fisher's combination methods for integrating two p-values of positive and negative strands
@@ -77,5 +77,3 @@ def get_EB_score(pen, row):
     else:
         EB_score = -round(math.log10(EB_pvalue), 3)
     return EB_score
-
-

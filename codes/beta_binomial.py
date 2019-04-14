@@ -13,7 +13,7 @@ def fisher_combination(p_values):
         return 1 - chi2.cdf(sum([-2 * math.log(x) for x in p_values.values()]), 2 * len(p_values.values()))
 
 
-def beta_binom_pvalues(params, target_df):
+def bb_pvalues(params, target_df):
     '''
     accumulate p_value of target observation falling in fitted bb_distribution (not a variant)
     p_values are computed per strand (pvalue_p and pvalue_n)
@@ -21,7 +21,7 @@ def beta_binom_pvalues(params, target_df):
     [n, k] --> sum of density (exp of loglikelihood) [n, k] to [n, n]
     '''
 
-    def beta_binom_pvalue(params, target_df):
+    def bb_pvalue(params, target_df):
         n_minus_k = target_df[0] - target_df[1]
         # get the list of observations [n, k] to [n, n]
         obs_list = [target_df + np.array([0,i]) for i in range(0, n_minus_k + 1)]
@@ -41,8 +41,8 @@ def beta_binom_pvalues(params, target_df):
     target_p = target_df.loc[['depth_p', 'mm_p']]
     target_n = target_df.loc[['depth_n', 'mm_n']]
     p_values = {}
-    p_values['p'] = beta_binom_pvalue(params['p'], target_p)
-    p_values['n'] = beta_binom_pvalue(params['n'], target_n)
+    p_values['p'] = bb_pvalue(params['p'], target_p)
+    p_values['n'] = bb_pvalue(params['n'], target_n)
     return p_values
 
 # the matrices for beta-binomial calculation
@@ -66,7 +66,7 @@ def bb_loglikelihood(params, count_df, is_1d):
     return log_likelihood
  
 
-def fit_beta_binomial(count_df, pen):
+def fit_bb(count_df, pen):
     '''
     Obtaining maximum likelihood estimator of beta-binomial distribution
     count_df is the array of depth-mismatch (trials, success) pairs over the PoN list for either strand
@@ -94,10 +94,12 @@ def fit_beta_binomial(count_df, pen):
                            args = (count_p, pen), approx_grad = True,
                            bounds = [(0.1, 10000000), (1, 10000000)]
                           )[0]
+    ab_p = [round(param, 5) for param in ab_p]
     ab_n = minimize_func(
                            bb_loglikelihood_fitting, [20, 20],
                            args = (count_n, pen), approx_grad = True,
                            bounds = [(0.1, 10000000), (1, 10000000)]
                           )[0]
+    ab_n = [round(param, 5) for param in ab_n]
     # print(f'abP: {ab_p} - abN: {ab_n}')
     return {'p':ab_p, 'n':ab_n}

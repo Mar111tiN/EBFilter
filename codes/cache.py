@@ -6,30 +6,16 @@ from io import StringIO
 import os
 import pandas as pd
 import numpy as np
-from .utils import clean_up_df, cleanup_badQ, bam_to_chr_list, clean_read_column, sort_chr
+from .anno import anno2pileup
+from .utils import clean_up_df, cleanup_badQ, clean_read_column, sort_chr, split_bam
 from .eb import get_count_df_snp
-from .beta_binomial import fit_beta_binomial, beta_binom_pvalues, fisher_combination
+from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
 import re
 import math
 
 sign_re = re.compile(r'\^.|\$')
 acgt = ['A','C','T','G']
 
-############# PON2SPLITBAM ############################################
-def split_bam(chromosome, pon_folder, pon_row):
-    '''
-    creates a sub bam file (+bai) of the specified chromosomal region per pon_list row
-    returns the name of the bam file for creating a sub pon_list
-    '''
-
-    bam_file = pon_row[0]
-    # create the name for the sub-bam file as org_bam_name_chr?.bam (and .bai)
-    bam_out = os.path.join(pon_folder, f"{os.path.splitext(os.path.basename(bam_file))[0]}_{str(chromosome)}.bam")
-    split_bam_cmd = ["samtools", "view", "-b", "-o", bam_out, bam_file, str(chromosome)]
-    bam_index_cmd = ["samtools", "index", bam_out]
-    subprocess.check_call(split_bam_cmd)
-    subprocess.check_call(bam_index_cmd)
-    return bam_out
 
 ############# PILEUP2BAM ############################################
 def pon2pileup(pon_dict, config, pon_folder, chromosome):
@@ -56,20 +42,18 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
 
     ############# PON2PILEUP ############################################
     # from the pon_list return a pileup_df
-    with open(config['log'], 'w+') as log:
-        # mpileup configs
-        mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q", str(config['Q']), "--ff", config['ff']]
-        # mpileup PoN list
-        mpileup_cmd += ["-b", pon_sub_list]
-        # optional (but highly recommended:-) bed_file for -l option
-        if config['bed_file']:
-            mpileup_cmd += ["-l", config['bed_file']]
-
-        pileup_stream = Popen(mpileup_cmd, stdout=PIPE, stderr=log)
-        pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
-        names = ['Chr', 'Start', 'Ref']
-        for i in range(pon_count):
-            names += [f"depth{i}", f"read{i}", f"Q{i}"]
+    # mpileup configs
+    mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q", str(config['Q']), "--ff", config['ff']]
+    # mpileup PoN list
+    mpileup_cmd += ["-b", pon_sub_list]
+    # optional (but highly recommended:-) bed_file for -l option
+    if config['bed_file']:
+        mpileup_cmd += ["-l", config['bed_file']]
+    pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
+    pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
+    names = ['Chr', 'Start', 'Ref']
+    for i in range(pon_count):
+        names += [f"depth{i}", f"read{i}", f"Q{i}"]
     pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names=names)
     if len(pileup_df.index) == 0:
         print(f'Pileup for chromosome {chromosome} is empty and will be dropped..')
@@ -102,7 +86,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     return {'df': pileup_df, 'chr': chromosome}
 
 
-def pileup2AB(config, chromosome, chr_len, pileup_df):
+def pileup2AB(config, chromosome, pileup_df):
     '''
     creates the AB_df for a pileup
     '''
@@ -129,7 +113,7 @@ def pileup2AB(config, chromosome, chr_len, pileup_df):
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
             # get the AB parameters for 
-            bb_params = fit_beta_binomial(count_df, penalty)
+            bb_params = fit_bb(count_df, penalty)
         # dump the different parameters into bb_s
         # keys have to fit with the var_columns for the receiving AB_df
             bb_s[f'{var}+a'] = bb_params['p'][0]
@@ -170,68 +154,73 @@ def generate_cache(pon_dict, config):
 
     print('Generating Cache...')
     threads = config['threads']
-    if threads == 1:
-        pileup_dict = pon2pileup(pon_dict, config, 'all_chromosomes')
-        AB_df = pileup2AB(config, 'all_chromosomes', pileup_dict['df'])
-    else: # multithreading
-        ####################### SET TO FINAL OUTPUT ########################
-        # make directory for temporary bam files
-        pon_folder = os.path.join(os.path.dirname(config['cache_folder']), 'pon')
-        if not os.path.isdir(pon_folder):
-            os.mkdir(pon_folder)
 
-        ######################### PON2PILEUP ###################################
-        # get the list of valid chromosomes from the first bam in the pon_list
-        chromosomes = bam_to_chr_list(pon_dict['df'].iloc[0,0])
-        cache_pool = Pool(threads)
-        # threads are mapped to the pool of chromosomes
-        # returns a dict {'df':pileup_df, 'chr': 'chr1'}
-        pileup_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config, pon_folder), chromosomes)
+    # make directory for temporary bam files
+    pon_folder = os.path.join(config['cache_folder'], 'pon')
+    if not os.path.isdir(pon_folder):
+        os.mkdir(pon_folder)
 
-        # remove Nones and sort for chromosome name
-        pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
-        cache_pool.close()
-        cache_pool.join()
+    ######################### PON2PILEUP ###################################
+    # get the list of valid chromosomes from the pon_list (computed in validate_pon)
+    if config['chr'] == 'all':
+        chromosomes = pon_dict['chr_list']
+    else:
+        chromosomes = [config['chr']]
 
-        ######################### PILEUP2AB ###################################
-        
-        AB_dfs = []
-        # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
-        # go through each chromosome with required number of threads
-        # create the job pool for the threads
-        for pileup_dict in pileup_dicts:  # account for empty pileups with filter(None..
-            chromosome = pileup_dict['chr']
-            chr_len = len(pileup_dict['df'].index)      # get length for progress info
-            # set the minimum number of lines for one thread to 10000
-            split_factor = min(math.ceil(chr_len / 2000), threads)
-            # split the arrays into litte fractions for computation
-            pileup_split = np.array_split(pileup_dict['df'], split_factor)
-            pileup2AB_pool = Pool(threads)
-            AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, config, chromosome, chr_len), pileup_split)
-            pileup2AB_pool.close()
-            pileup2AB_pool.join()
-            # concatenate the AB_dfs for each chromosome to AB_chr_df
-            AB_chr_df = pd.concat(AB_chr_dfs)
-            AB_dfs.append(AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]]))
+    cache_pool = Pool(threads)
+    # threads are mapped to the pool of chromosomes
+    # returns a dict {'df':pileup_df, 'chr': 'chr1'}
+    pileup_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config, pon_folder), chromosomes)
 
-            ############### OUTPUT ###########################################################
-            chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
-            print(f"Writing ABcache for Chr {chromosome} to file {chr_cache}.")
-            AB_chr_df.to_csv(chr_cache, sep=',', index=False)
+    # remove Nones and sort for chromosome name
+    pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
+    cache_pool.close()
+    cache_pool.join()
+
+    ######################### PILEUP2AB ###################################
+    
+    AB_dfs = []
+    # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
+    # go through each chromosome with required number of threads
+    # create the job pool for the threads
+    for pileup_dict in pileup_dicts:  # account for empty pileups with filter(None..
+        chromosome = pileup_dict['chr']
+        chr_len = len(pileup_dict['df'].index)      # get length for progress info
+        print(f'Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..')
+        # set the minimum number of lines for one thread to 10000
+        split_factor = min(math.ceil(chr_len / 2000), threads)
+        # split the arrays into litte fractions for computation
+        pileup_split = np.array_split(pileup_dict['df'], split_factor)
+        pileup2AB_pool = Pool(threads)
+        AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, config, chromosome), pileup_split)
+        pileup2AB_pool.close()
+        pileup2AB_pool.join()
+        # concatenate the AB_dfs for each chromosome to AB_chr_df
+        AB_chr_df = pd.concat(AB_chr_dfs)
+        AB_dfs.append(AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]]))
+
+        ############### OUTPUT ###########################################################
+        chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
+        print(f"Writing ABcache for Chr {chromosome} to file {chr_cache}.")
+        AB_chr_df.to_csv(chr_cache, sep=',', index=False)
 
         AB_df = pd.concat(AB_dfs)
         AB_df = AB_df.sort_values([AB_df.columns[0], AB_df.columns[1]])
-        # AB_df = out_df.sort_values([out_df.columns[0], out_df.columns[1]])
-
+        # add all.cache
+    all_df = pd.concat(AB_dfs)
+    all_df = all_df.sort_values([all_df.columns[0], all_df.columns[1]])
     ############# DEBUG #####################################################################
     # remove the pon_list and all bam files (by removing the whole pon folder)
     if not config['debug_mode'] and threads > 1:    
         subprocess.check_call(['rm', '-r', pon_folder])
     #########################################################################################   
 
-    all_cache = os.path.join(config['cache_folder'], "all.cache")
-    print(f"Writing final ABcache for covered regions to file {all_cache}.")
-    AB_df.to_csv(all_cache, sep=',', index=False)
+
+    ####################### SET TO FINAL OUTPUT ########################
+    if config['chr'] == 'all':
+        all_cache = os.path.join(config['cache_folder'], "all.cache")
+        print(f"Writing final ABcache for covered regions to file {all_cache}.")
+        all_df.to_csv(all_cache, sep=',', index=False)
 
     return 'Generation of AB file finished.'
 
@@ -241,12 +230,17 @@ def get_EBscore_from_AB(pen, row):
     no fitting is needed as parameters are precomputed and stored in row[5:9]
     '''
 
-    count_df = get_count_df_snp(row, row['Alt'].upper(), 9)
+    # we only get the snp count_df, using the mut_df 'Alt' as var and adjust for AB_df with column 9
+    count_df = get_count_df_snp(row, row['Alt'].upper(), 10)
     bb_params = {}
+
+    # feed-in the AB params coming with the row
     bb_params['p'] = [row['a+'], row['b+']]
     bb_params['n'] = [row['a-'], row['b-']]
 
-    p_values = beta_binomial_pvalues(bb_params, target_df)
+    # get the dataSeries for read0
+    target_df = count_df.loc['read0']
+    p_values = bb_pvalues(bb_params, target_df)
 
     ############ FISHER COMBINATION #########################
     # perform Fisher's combination methods for integrating two p-values of positive and negative strands
@@ -271,6 +265,7 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     # the merger columns
     cols = ['Chr', 'Start', 'Alt']
     # load the file and set Chr and Start to index for proper setting of multi-index
+    print(f"Loading cache {cache_file}..")
     AB_df = pd.read_csv(cache_file, sep=',').set_index(cols[:2]) 
     AB_columns = pd.MultiIndex.from_product([['A','C','T','G'],['+', '-'],['a','b']], names=['var', 'strand', 'param'])
     # set multi-indexed columns
@@ -279,15 +274,17 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     AB_df = AB_df.stack('var')
     # reduce the column index level to 1
     AB_df.columns = AB_df.columns.droplevel(0)
+    # unset the indices and transfer to columns
+    AB_df = AB_df.reset_index()
     # rename columns for merge
     AB_df.columns = cols + ['a+', 'b+', 'a-', 'b-']
-    snpAB_df = pd.merge(snpAB_df, AB_df, on=cols)
+    snpAB_df = pd.merge(snp_df, AB_df, on=cols)
+    
     # set region list file_path
     region_list = os.path.join(config['cache_folder'], chrom)
-    snpAB_df = anno2pileup(snp_AB_df, region_list, tumor_bam, None, None, config)
+    snpAB_df = anno2pileup(snpAB_df, region_list, tumor_bam, None, None, config)
     # remove start/end signs
-    clean_up_df(snpAB_df, 0)
-
-    snpAB_df['EB_score'] = snpAB_df.apply(partial(get_EBscore_from_AB, config['fitting_penalty'], axis=1))
+    clean_up_df(snpAB_df, 0, config)
+    snpAB_df['EB_score'] = snpAB_df.apply(partial(get_EBscore_from_AB, config['fitting_penalty']), axis=1)
 
     return snpAB_df.loc[:,['Chr', 'Start', 'EB_score']]
