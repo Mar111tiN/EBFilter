@@ -240,8 +240,6 @@ def generate_cache(pon_dict, config):
         AB_df = pd.concat(AB_dfs)
         AB_df = AB_df.sort_values([AB_df.columns[0], AB_df.columns[1]])
         # add all.cache
-    all_df = pd.concat(AB_dfs)
-    all_df = all_df.sort_values([all_df.columns[0], all_df.columns[1]])
     ############# DEBUG #####################################################################
     # remove the pon_list and all bam files (by removing the whole pon folder)
     if not config['debug_mode'] and threads > 1:    
@@ -251,6 +249,8 @@ def generate_cache(pon_dict, config):
 
     ####################### SET TO FINAL OUTPUT ########################
     if config['chr'] == 'all':
+        all_df = pd.concat(AB_dfs)
+        all_df = all_df.sort_values([all_df.columns[0], all_df.columns[1]])
         all_cache = os.path.join(config['cache_folder'], "all.cache")
         print(f"Writing final ABcache for covered regions to file {all_cache}.")
         all_df.to_csv(all_cache, sep=',', index=False)
