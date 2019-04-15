@@ -10,7 +10,7 @@ from .eb import get_EB_score
 
 def worker(tumor_bam, pon_dict, output_path, region, config, mut_df):
 
-    pon_count = len(pon_dict['df'].index)
+    pon_count = 0 if config['cache_mode'] else len(pon_dict['df'].index)
 
     ########### PANDAS IMPORT ################
     # mut_pd = pd.read_csv(mutfile, sep=',')

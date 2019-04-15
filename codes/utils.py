@@ -48,6 +48,7 @@ def sort_chr(dict):
     '''
     sorts all types of chromosome lists
     '''
+
     chr = dict['chr'].replace('Chr', '').replace('chr', '')
     assigner = {'X':50, 'Y':60, 'M':70, '*':80}
     try:
@@ -63,6 +64,7 @@ def bam2chr_list(bam_file):
     '''
     creates a list of chromosome names for the input bam
     '''
+
 
     bam_stats_cmd = ['samtools', 'idxstats', bam_file]
     bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
@@ -118,6 +120,7 @@ def validate_cache(cache_folder, pon_dict):
     '''
     file existence check for cache folder and the containing cache files
     '''
+
     if not os.path.isdir(cache_folder):
         sys.stderr.write(f"Cache folder {cache_folder} cannot be found! Exiting..")
         sys.exit(1)        
@@ -162,28 +165,34 @@ def read_anno_csv(mut_file, config):
         except ValueError:
             return Chr_name       
 
+    def check_columns(mut_file, anno_df, config):
+        '''
+        raises error, if only one column was detected
+        '''
+        row, col = anno_df.shape
+        if col == 1:
+            sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
+            sys.exit(1)
 
     with open(mut_file, 'r') as input_file:
         has_header = csv.Sniffer().has_header(input_file.read(1024))
 
     sep = config['sep']
-    print(f'Loading annotation file {mut_file} into dataframe')
 
     if has_header:
         print(f'Header detected')
         anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
         org_columns = anno_df.columns
+        check_columns(mut_file, anno_df, config)
         anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
     else:
         anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
-        row, col = anno_df.shape
-        if col == 1:
-            sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
-            sys.exit(1)
+        check_columns(mut_file, anno_df, config)
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
         anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
-        print(f'Adding header: Chr\tStart\tEnd\tRef\tAlt\tother1...')
+    if config['chr'] != 'all':
+        anno_df = anno_df.loc[anno_df['Chr'] == to_int(config['chr'])]
     return (anno_df.sort_values(['Chr', 'Start']), org_columns)
 
 
@@ -207,9 +216,10 @@ def clean_read_column(read_series):
         '''
         removes per column all reads with start/end signs
         '''
-        # should include indel removal as well?
 
+        # should include indel removal as well?
         return read_series.str.replace(sign_re, '')
+
 
 def clean_up_df(mut_df, pon_count, config):
     '''
