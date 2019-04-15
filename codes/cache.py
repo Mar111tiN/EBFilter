@@ -216,6 +216,7 @@ def generate_cache(pon_dict, config):
         if pileup_dict['df'] == 'empty':
             print(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
             open(chr_cache, 'a').close()
+            continue
         chr_len = len(pileup_dict['df'].index)      # get length for progress info     
         # set the minimum number of lines for one thread to 2000
         split_factor = min(math.ceil(chr_len / 2000), threads)
