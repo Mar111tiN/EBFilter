@@ -60,7 +60,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
         pileup_file = os.path.join(pileup_folder, f"cache_{chromosome}.pileup")
         mpileup_cmd += ['-o', pileup_file]
         subprocess.check_call(mpileup_cmd)
-    # use StringIO for small files
+    # use StringIO for small files (not implemented)
     else:
         pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
         pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
@@ -71,7 +71,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     pileup_df = pd.read_csv(pileup_file, sep='\t', header=None, names=names)
     if len(pileup_df.index) == 0:
         print(f'Pileup for chromosome {chromosome} is empty and will be dropped..')
-        return
+        return {'file': 'empty', 'chr': chromosome}
 
     ############## CLEANUP PILEUP #######################################
     # get the count from the number of columns of pileup_df
@@ -190,6 +190,9 @@ def generate_cache(pon_dict, config):
     # reading the pileup files into dfs
     pileup_dicts = []
     for pileup_file_dict in pileup_file_dicts:
+        if pileup_file_dict['file'] == 'empty':
+           pileup_dicts.append({'df': 'empty', 'chr': pileup_file_dict['chr']})
+           continue
         pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
 
         print(f'Reading pileup {pileup_file_dict["file"]} for AB computation')
@@ -209,6 +212,10 @@ def generate_cache(pon_dict, config):
     # create the job pool for the threads
     for pileup_dict in pileup_dicts:  # account for empty pileups with filter(None..
         chromosome = pileup_dict['chr']
+        chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
+        if pileup_dict['df'] == 'empty':
+            print(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
+            open(chr_cache, 'a').close()
         chr_len = len(pileup_dict['df'].index)      # get length for progress info     
         # set the minimum number of lines for one thread to 2000
         split_factor = min(math.ceil(chr_len / 2000), threads)
