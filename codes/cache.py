@@ -191,12 +191,12 @@ def generate_cache(pon_dict, config):
     pileup_dicts = []
     for pileup_file_dict in pileup_file_dicts:
         if pileup_file_dict['file'] == 'empty':
-           pileup_dicts.append({'df': 'empty', 'chr': pileup_file_dict['chr']})
+           pileup_dicts.append({'chr': pileup_file_dict['chr'], 'empty': True})
            continue
         pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
 
         print(f'Reading pileup {pileup_file_dict["file"]} for AB computation')
-        pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr']}
+        pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr'], 'empty': False}
         pileup_dicts.append(pileup_dict)
         ########## DEBUG ####################################
         if not config['debug_mode']:
@@ -204,8 +204,8 @@ def generate_cache(pon_dict, config):
 
     pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
 
+
     ######################### PILEUP2AB ###################################
-    
     AB_dfs = []
     # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
     # go through each chromosome with required number of threads
@@ -213,7 +213,7 @@ def generate_cache(pon_dict, config):
     for pileup_dict in pileup_dicts:  # account for empty pileups with filter(None..
         chromosome = pileup_dict['chr']
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
-        if pileup_dict['df'] == 'empty':
+        if pileup_dict['empty']:
             print(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
             open(chr_cache, 'a').close()
             continue
