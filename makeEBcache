@@ -24,8 +24,8 @@ parser.add_argument("cache_folder", metavar = "EB_cache_folder", type = str,
 
 ################################## OPTIONAL ###################################################
 
-parser.add_argument("-chromosome", metavar = "chromosome", type = str, default=None, 
-                    help = "restrict the analysis to a certain chromosome")
+parser.add_argument("-chrom", metavar = "chromosome", type = str, default=None, 
+                    help = "restrict caching to a certain chromosome")
 
 parser.add_argument("-bed_file", metavar = "bed_file.bed", type = str, default=None, 
                     help = "the path to bed file used on the bams in the PoN list (-l option for mpileup)")

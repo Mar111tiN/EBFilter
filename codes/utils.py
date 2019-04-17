@@ -65,7 +65,6 @@ def bam2chr_list(bam_file):
     creates a list of chromosome names for the input bam
     '''
 
-
     bam_stats_cmd = ['samtools', 'idxstats', bam_file]
     bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
     bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
@@ -83,6 +82,26 @@ def pon2chr_list(pon_df):
     return list(chr_set)
 
 
+def bed2chr_list(bed_file):
+    '''
+    generates a chromosome list from a annotated mutation file
+    '''
+
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None, skiprow=10)
+    # return the list of unique values from the first row (Chr row)
+    return bed_df.iloc[:,0].unique()
+
+
+def anno2chr_list(bed_file):
+    '''
+    generates a chromosome list from a annotated mutation file
+    '''
+
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None)
+    # return the list of unique values from the first row (Chr row)
+    return bed_df.iloc[:,0].unique()
+
+
 def validate(file, message):
     '''
     file existence checks
@@ -94,7 +113,7 @@ def validate(file, message):
         return file
 
 
-def validate_bam(bam_file):
+def validate_bam(config, bam_file):
     '''
     file existence for bam files and accompanying bai files
     '''
@@ -102,52 +121,90 @@ def validate_bam(bam_file):
     if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
         sys.exit(1)
+    bam_chr = bam2chr_list(bam_file)
+    if not set(bam_chr) in set(config['pon_chr']):
+        sys.stderr.write(f"Tumor file {bam_file} contains chroms not found in PanelOfNormals. Exiting..")
+        sys.exit(1) 
     return bam_file
 
 
-def validate_pon(pon_list):
+def validate_pon(pon_list, config):
     '''
     file existence check for pon_list and the containing bam (and bai) files
+    returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chromosomes
     '''
     
     pon_df = pd.read_csv(validate(pon_list, "No control list file"), header=None)
-    pon_df[0].apply(validate_bam)
-    chr_list = pon2chr_list(pon_df)
-    return {'list': pon_list, 'df': pon_df, 'chr_list': chr_list}
+    config['pon_chr'] == pon2chr_list(pon_df)
+    pon_df[0].apply(partial(validate_bam, config))
+    return {'list': pon_list, 'df': pon_df}
 
 
-def validate_cache(cache_folder, pon_dict):
+def validate_bed(bed_file):
+    '''
+    check for existence of bed_file and if chroms are compatible with PONs
+    '''
+    bed_file = validate(bed_file)
+    bed_chr = bed2chr_list(bed_file)
+    if not set(bed_chr).issubset(set(config['pon_chr'])):
+        sys.stderr.write(f"Bed file {bed_file} contains chroms not found in PanelOfNormals. Exiting..")
+        sys.exit(1)
+    return (bed_file, bed_chr)
+
+
+
+def validate_cache(cache_folder, config):
     '''
     file existence check for cache folder and the containing cache files
+    returns the validated cache_folder
     '''
 
+    # check existence of cache folder
     if not os.path.isdir(cache_folder):
         sys.stderr.write(f"Cache folder {cache_folder} cannot be found! Exiting..")
-        sys.exit(1)        
-    chr_set = pon_dict['chr_list']
-    cache_file_tuples = [(os.path.join(cache_folder, f"{chrom}.cache"), chrom) for chrom in chr_set]
-    all_cache_file = os.path.join(cache_folder, 'all.cache')
-    missing_cache_tuples = []
+        sys.exit(1)
+
+    # check existence of cache files for the chroms in the pon folder and store in cache_chr
+    cache_file_tuples = [(os.path.join(cache_folder, f"{chrom}.cache"), chrom) for chrom in config['pon_chr']]
+    cache_chr = []
+    # store existing cache_files in cache_chr
     for cache_file_tuple in cache_file_tuples:
-        if not os.path.isfile(cache_file_tuple[0]):
-            if not os.path.isfile(all_cache_file):
-                file_name = os.path.basename(cache_file_tuple[0])
-                sys.stderr.write(f"Cache file {file_name} cannot be found in folder {cache_folder}! Exiting..")
-                sys.exit(1)
+        if os.path.isfile(cache_file_tuple[0]):
+            cache_chr.append(cache_file_tuple[1])
+    if len(cache_chr) == 0:
+        sys.stderr.write(f"Cache folder {cache_folder} contains no usable cache files! Exiting..")
+        sys.exit(1)
+    return (cache_folder, cache_chr)
+
+
+def check_cache_files(config):
+    '''
+    checks all active chromosoms for a preexisting cache file and only returns the list of missing cache files
+    '''
+
+    not_cached = []
+    for chrom in config['chr']:
+        cache_file = os.path.join(config['cache_folder'], f"chrom.cache")
+        if os.path.isfile(cache_file):
+            print(f"Cache file {cache_file} found. Does not need to be generated.")
+        else:
+            not_cached.append(chrom)
+    return not_cached
+
+
+def check_pileup_files(config):
+    '''
+    checks, whether pileup files already exist and returns the chrom list for non_existing pileups
+    '''
+    not_piled_up = []
+        for chrom in config['chr']:
+            pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
+            pileup_file = os.path.join(pileup_folder, f"cache_{chromosome}.pileup")
+            if os.path.isfile(pileup_file):
+                print(f"Pileup file {pileup_file} found. Does not need to be built again.")
             else:
-                missing_cache_tuples.append(cache_file_tuple)
-    # get chr.cache files from all.cache
-    if len(missing_cache_tuples):
-        all_cache_df = pd.read_csv(all_cache_file, sep=',').set_index('Chr')
-        for t in missing_cache_tuples:
-            try:
-                chr_df = all_cache_df.loc[t[1]].reset_index()
-                all_cache_df.to_csv(t[0], sep=',')
-            except KeyError:
-                print(f'Cache has no data for Chr {t[1]}')
-
-    return cache_folder
-
+                not_piled_up.append(chrom)
+    return not_piled_up
 
 def read_anno_csv(mut_file, config):
     '''
@@ -169,6 +226,7 @@ def read_anno_csv(mut_file, config):
         '''
         raises error, if only one column was detected
         '''
+
         row, col = anno_df.shape
         if col == 1:
             sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
@@ -191,15 +249,27 @@ def read_anno_csv(mut_file, config):
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
         anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
-    if config['chr'] != 'all':
-        anno_df = anno_df.loc[anno_df['Chr'] == to_int(config['chr'])]
-    return (anno_df.sort_values(['Chr', 'Start']), org_columns)
+    # retrieve chromosome list occurring in anno_file
+    anno_chr = anno_df.iloc[:,0].unique()
+
+    if set(anno_chr).issubset(set(config['pon_chr'])):
+        # active chroms are only the ones found in the anno file and in config['chr']
+        config['chr'] = list(set(anno_chr) & set(config['chr']))
+        # if chromosome is given, reduce the anno file to the provided chromosomes
+        anno_df = anno_df.query(f'Chr in {config['chr']}')
+    else:   # raise error if unknown chroms occur in pon file
+        sys.stderr.write(f"Found chromosomes in anno file {mut_file} that are not found in PanelOfNormals. Exiting..")
+        sys.exit(1)
+    # return tuples of anno_df, original columns and chroms occurring in anno_chr
+    return (anno_df.sort_values(['Chr', 'Start']), org_columns, anno_chr)
 
 
 def make_region_list(mut_df, out_path, threads):
-    # make bed file for mpileup
-    # with a pandas dataframe
+    '''
+    make bed file for mpileup from mut_df
     # better to open the original file as pandas in this function
+    '''
+
     region_pd = mut_df.iloc[:,:5].copy()
     region_pd.iloc[:,1] = mut_df.iloc[:,1] - 1 - (mut_df.iloc[:,4] == '-')
     region_pd.iloc[:,2] = mut_df.iloc[:,1] - (mut_df.iloc[:,4] == '-')
