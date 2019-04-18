@@ -27,12 +27,8 @@ def main(args, config):
     threads = config['threads']
     debug_mode = config['debug_mode']
     # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
-<<<<<<< HEAD
-    pon_dict = utils.validate_pon(args['pon_list'], config)  
-=======
     pon_dict = utils.validate_pon(args['pon_list'], config) 
-    print("config after validate pon", config['pon_chr'])
->>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
+
 
     ###### set chromosome ########################### 
     # set config['chr'] to chromosome if provided in makeEBcache
@@ -65,11 +61,8 @@ def main(args, config):
         # validate bed file and get the chromosomes needed for caching
         bed_file = args['bed_file'] if 'bed_file' in args.keys() else None
         if bed_file:
-<<<<<<< HEAD
             config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file, config)
-=======
             config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file)
->>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
             valid_chrs = list(set(config['bed_chr']) & set(config['chr']))
             if len(valid_chrs):
                 # load the valid chroms in the bed file into the active chroms
@@ -98,11 +91,7 @@ def main(args, config):
     if cache_folder:
         # validate cache returns the cache_folder (same as input) and the chrom list of the..
         # ..existing cache files --> stored in config
-<<<<<<< HEAD
-        config['cache_folder'], config['cache_chr'] = utils.validate_cache(cache_folder, pon_dict)
-=======
         config['cache_folder'], config['cache_chr'] = utils.validate_cache(cache_folder, config)
->>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
         config['cache_mode'] = True
         print('Running EBscore in EBcache mode...')          
         
@@ -113,11 +102,8 @@ def main(args, config):
         print(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..')
 
     # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
-<<<<<<< HEAD
-    tumor_bam = utils.validate_bam(args['tumor_bam'], config)
-=======
+
     tumor_bam = utils.validate_bam(config, args['tumor_bam'])
->>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
     output_path = args['output_path']   
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
     
