@@ -92,14 +92,24 @@ def bed2chr_list(bed_file):
     return bed_df.iloc[:,0].unique()
 
 
+<<<<<<< HEAD
 def anno2chr_list(anno_file):
+=======
+def anno2chr_list(bed_file):
+>>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
     '''
     generates a chrom list from a annotated mutation file
     '''
 
+<<<<<<< HEAD
     anno_df = pd.read_csv(anno_file, sep='\t', dtype={0:str}, header=None)
     # return the list of unique values from the first row (Chr row)
     return anno_df.iloc[:,0].unique()
+=======
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None)
+    # return the list of unique values from the first row (Chr row)
+    return bed_df.iloc[:,0].unique()
+>>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
 
 
 def validate(file, message):
@@ -141,7 +151,11 @@ def validate_pon(pon_list, config):
     return {'list': pon_list, 'df': pon_df}
 
 
+<<<<<<< HEAD
 def validate_bed(bed_file, config):
+=======
+def validate_bed(bed_file):
+>>>>>>> 06cb1953819d969e92ab6ab4762d416cd6a55d6d
     '''
     check for existence of bed_file and if chroms are compatible with PONs
     '''
