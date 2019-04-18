@@ -87,7 +87,7 @@ def bed2chr_list(bed_file):
     generates a chrom list from a annotated mutation file
     '''
 
-    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None, skiprow=10)
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None, skiprows=10)
     # return the list of unique values from the first row (Chr row)
     return bed_df.iloc[:,0].unique()
 
