@@ -18,14 +18,14 @@ acgt = ['A','C','T','G']
 
 
 ############# PILEUP2BAM ############################################
-def pon2pileup(pon_dict, config, pon_folder, chromosome):
+def pon2pileup(pon_dict, config, chromosome):
     '''
     create the dataframe of AB parameters per region per mismatch base
     '''
 
     # get the number of files in the pon_list
     pon_count = len(pon_dict['df'].index)
-
+    pon_folder = config['pon_folder']
     # create a chromosome-bound bam and bai for each bam in the pon_list
     # write the created bams to a dataframe and output as pon_list
     print(f'Generating  pileup for chromosome {chromosome}..')
@@ -48,9 +48,11 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     if config['bed_file']:
         mpileup_cmd += ["-l", config['bed_file']]
 
-    pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
+    # create the pileup folder
+    config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
     if not os.path.isdir(pileup_folder):
         os.mkdir(pileup_folder)
+
     pileup_file = os.path.join(pileup_folder, f"cache_{chromosome}.pileup")
     mpileup_cmd += ['-o', pileup_file]
     subprocess.check_call(mpileup_cmd)
@@ -67,7 +69,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
         names += [f"depth{i}", f"read{i}", f"Q{i}"]
     pileup_df = pd.read_csv(pileup_file, sep='\t', header=None, names=names)
     if len(pileup_df.index) == 0:
-        print(f'Pileup for chromosome {chromosome} is empty and will be dropped..')
+        print(f"Pileup for chromosome {chromosome} is empty and will be dropped..")
         return {'file': 'empty', 'chr': chromosome}
 
     ############## CLEANUP PILEUP #######################################
@@ -79,14 +81,8 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     pileup_df[read_columns] = pileup_df[read_columns].apply(utils.clean_read_column)
 
     ############## WRITE TO FILE #############################################
-
-    pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
-    if not os.path.isdir(pileup_folder):
-        os.mkdir(pileup_folder)
-
-    pileup_file = os.path.join(pileup_folder, f'cache_{chromosome}.pileup')
     # write the pileup df to csv as <cache_folder>/ab_cache[_chr1].pileup
-    print(f'Writing pileup of Chr {chromosome} to file {pileup_file}')
+    print(f"Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
     return {'file': pileup_file, 'chr': chromosome}
@@ -162,7 +158,7 @@ def generate_cache(pon_dict, config):
     threads = config['threads']
 
     # make directory for temporary bam files
-    pon_folder = os.path.join(config['cache_folder'], 'pon')
+    config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
     if not os.path.isdir(pon_folder):
         os.mkdir(pon_folder)
 
@@ -181,7 +177,8 @@ def generate_cache(pon_dict, config):
     pileup_file_dicts = []
     success_messages = []
     # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
-    pileup_file_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config, pon_folder), config['chr'])
+
+    pileup_file_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config), config['chr'])
     # remove Nones and sort for chromosome name
     cache_pool.close()
     cache_pool.join()
@@ -194,12 +191,14 @@ def generate_cache(pon_dict, config):
            continue
         pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
 
-        print(f'Reading pileup {pileup_file_dict["file"]} for AB computation')
+        print(f"Reading pileup {pileup_file_dict['file']} for AB computation")
         pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr'], 'empty': False}
         pileup_dicts.append(pileup_dict)
+
         ########## DEBUG ####################################
         if not config['debug_mode']:
             subprocess.check_call(['rm', '-f', pileup_file_dict['file']])
+        #####################################################
 
     # account for empty pileups with filter(None..
     pileup_dicts = sorted(filter(None, pileup_dicts), key=utils.sort_chr)
@@ -220,7 +219,7 @@ def generate_cache(pon_dict, config):
         # set the minimum number of lines for one thread to 2000
         split_factor = min(math.ceil(chr_len / 2000), threads)
         if split_factor > 1:
-            print(f'Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..')
+            print(f"Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..")
         # split the arrays into litte fractions for computation
         pileup_split = np.array_split(pileup_dict['df'], split_factor)
         pileup2AB_pool = Pool(threads)
@@ -243,6 +242,7 @@ def generate_cache(pon_dict, config):
     # remove the pon_list and all bam files (by removing the whole pon folder)
     if not config['debug_mode'] and threads > 1:    
         subprocess.check_call(['rm', '-r', pon_folder])
+        subprocess.check_call(['rm', '-r', config['pileup_folder']])
     #########################################################################################   
 
     return 'Generation of AB file finished.'
