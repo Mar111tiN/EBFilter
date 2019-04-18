@@ -29,7 +29,6 @@ def main(args, config):
     # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
     pon_dict = utils.validate_pon(args['pon_list'], config) 
 
-
     ###### set chromosome ########################### 
     # set config['chr'] to chromosome if provided in makeEBcache
     config['chr'] = [args['chrom']] if 'chrom' in args.keys() else config['pon_chr']
@@ -62,7 +61,6 @@ def main(args, config):
         bed_file = args['bed_file'] if 'bed_file' in args.keys() else None
         if bed_file:
             config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file, config)
-            config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file)
             valid_chrs = list(set(config['bed_chr']) & set(config['chr']))
             if len(valid_chrs):
                 # load the valid chroms in the bed file into the active chroms
@@ -102,7 +100,6 @@ def main(args, config):
         print(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..')
 
     # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
-
     tumor_bam = utils.validate_bam(config, args['tumor_bam'])
     output_path = args['output_path']   
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')

@@ -28,7 +28,6 @@ def main(args, config):
     debug_mode = config['debug_mode']
     # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
     pon_dict = utils.validate_pon(args['pon_list'], config) 
-    print("config after validate pon", config['pon_chr'])
 
     ###### set chromosome ########################### 
     # set config['chr'] to chromosome if provided in makeEBcache
