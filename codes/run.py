@@ -60,7 +60,7 @@ def main(args, config):
         # validate bed file and get the chromosomes needed for caching
         bed_file = args['bed_file'] if 'bed_file' in args.keys() else None
         if bed_file:
-            config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file)
+            config['bed_file'], config['bed_chr'] = utils.validate_bed(bed_file, config)
             valid_chrs = list(set(config['bed_chr']) & set(config['chr']))
             if len(valid_chrs):
                 # load the valid chroms in the bed file into the active chroms
