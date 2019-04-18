@@ -162,21 +162,22 @@ def generate_cache(pon_dict, config):
         os.mkdir(pon_folder)
 
     ######################### PON2PILEUP ###################################
-    # get the list of chromswithout existing cache file from config['chr']
+    # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
-    # get the list of chroms without existing pileup_files from config['chr']
-    config['chr'] = utils.check_pileup_files(config)
-
+    ####################### !!!!!!!!!!!!!!!!!!!!! ###########################
+    # get the list of chroms without existing pileup_files from config['chr'] and store the existing 
+    # pileups in pileup_file_dicts
+    pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
+    print(pileup_chrs, pileup_file_dicts)
     # init the processor pool
     cache_pool = Pool(threads)
     # threads are mapped to the pool of chroms
 
     ###################### !!!! multiprocessing.Pool can only transfer data up to a certain size
     # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
-    pileup_file_dicts = []
     success_messages = []
     # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
-    pileup_file_dicts = cache_pool.map(partial(pon2pileup, pon_dict, config), config['chr'])
+    pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
     # remove Nones and sort for chromosome name
     cache_pool.close()
     cache_pool.join()

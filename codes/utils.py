@@ -117,6 +117,8 @@ def validate_bam(config, bam_file):
     '''
     file existence for bam files and accompanying bai files
     '''
+
+    print(f"validating {bam_file}")
     validate(bam_file, "No control bam file")
     if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
@@ -136,8 +138,8 @@ def validate_pon(pon_list, config):
     '''
     
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
-    config['pon_chr'] = pon2chr_list(pon_df)
     pon_df[0].apply(partial(validate_bam, config))
+    config['pon_chr'] = pon2chr_list(pon_df)
     return {'list': pon_list, 'df': pon_df}
 
 
@@ -197,16 +199,21 @@ def check_cache_files(config):
 def check_pileup_files(config):
     '''
     checks, whether pileup files already exist and returns the chrom list for non_existing pileups
+    returns list of missing pileup files and list of pileup_dicts for existing pileups
     '''
+
     not_piled_up = []
+    already_piledup_dicts = []
     for chrom in config['chr']:
         pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
         pileup_file = os.path.join(pileup_folder, f"cache_{chrom}.pileup")
         if os.path.isfile(pileup_file):
             print(f"Pileup file {pileup_file} found. Does not need to be built again.")
+            already_piledup_dicts.append({'file': pileup_file, 'chr': chrom})
         else:
             not_piled_up.append(chrom)
-    return not_piled_up
+
+    return not_piled_up, already_piledup_dicts
 
 def read_anno_csv(mut_file, config):
     '''
