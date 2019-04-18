@@ -16,7 +16,7 @@ indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
 
 ############# PON2SPLITBAM ############################################
-def split_bam(chromosome, pon_folder, pon_row):
+def split_bam(chrom, pon_folder, pon_row):
     '''
     creates a sub bam file (+bai) of the specified chromosomal region per pon_list row
     returns the name of the bam file for creating a sub pon_list
@@ -24,8 +24,8 @@ def split_bam(chromosome, pon_folder, pon_row):
 
     bam_file = pon_row[0]
     # create the name for the sub-bam file as org_bam_name_chr?.bam (and .bai)
-    bam_out = os.path.join(pon_folder, f"{os.path.splitext(os.path.basename(bam_file))[0]}_{str(chromosome)}.bam")
-    split_bam_cmd = ["samtools", "view", "-b", "-o", bam_out, bam_file, str(chromosome)]
+    bam_out = os.path.join(pon_folder, f"{os.path.splitext(os.path.basename(bam_file))[0]}_{str(chrom)}.bam")
+    split_bam_cmd = ["samtools", "view", "-b", "-o", bam_out, bam_file, str(chrom)]
     bam_index_cmd = ["samtools", "index", bam_out]
     subprocess.check_call(split_bam_cmd)
     subprocess.check_call(bam_index_cmd)
@@ -46,7 +46,7 @@ def validate_region(region):
 
 def sort_chr(dict):
     '''
-    sorts all types of chromosome lists
+    sorts all types of chrom lists
     '''
 
     chr = dict['chr'].replace('Chr', '').replace('chr', '')
@@ -62,7 +62,7 @@ def sort_chr(dict):
 
 def bam2chr_list(bam_file):
     '''
-    creates a list of chromosome names for the input bam
+    creates a list of chrom names for the input bam
     '''
 
     bam_stats_cmd = ['samtools', 'idxstats', bam_file]
@@ -75,7 +75,7 @@ def bam2chr_list(bam_file):
 
 def pon2chr_list(pon_df):
     '''
-    generate a chromosome list from the pon_list
+    generate a chrom list from the pon_list
     '''
     chr_set = set()
     pon_df[0].apply(lambda bam_file: chr_set.update(bam2chr_list(bam_file)))
@@ -84,7 +84,7 @@ def pon2chr_list(pon_df):
 
 def bed2chr_list(bed_file):
     '''
-    generates a chromosome list from a annotated mutation file
+    generates a chrom list from a annotated mutation file
     '''
 
     bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None, skiprow=10)
@@ -94,7 +94,7 @@ def bed2chr_list(bed_file):
 
 def anno2chr_list(bed_file):
     '''
-    generates a chromosome list from a annotated mutation file
+    generates a chrom list from a annotated mutation file
     '''
 
     bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None)
@@ -122,7 +122,8 @@ def validate_bam(config, bam_file):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
         sys.exit(1)
     bam_chr = bam2chr_list(bam_file)
-    if not set(bam_chr) in set(config['pon_chr']):
+    if not set(bam_chr).issubset(set(config['pon_chr'])):
+        print('bam:', set(bam_chr), 'pon:', set(config['pon_chr']))
         sys.stderr.write(f"Tumor file {bam_file} contains chroms not found in PanelOfNormals. Exiting..")
         sys.exit(1) 
     return bam_file
@@ -131,11 +132,11 @@ def validate_bam(config, bam_file):
 def validate_pon(pon_list, config):
     '''
     file existence check for pon_list and the containing bam (and bai) files
-    returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chromosomes
+    returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chroms
     '''
     
-    pon_df = pd.read_csv(validate(pon_list, "No control list file"), header=None)
-    config['pon_chr'] == pon2chr_list(pon_df)
+    pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
+    config['pon_chr'] = pon2chr_list(pon_df)
     pon_df[0].apply(partial(validate_bam, config))
     return {'list': pon_list, 'df': pon_df}
 
@@ -144,7 +145,8 @@ def validate_bed(bed_file):
     '''
     check for existence of bed_file and if chroms are compatible with PONs
     '''
-    bed_file = validate(bed_file)
+
+    bed_file = validate(bed_file, 'No bed file found. Exiting..')
     bed_chr = bed2chr_list(bed_file)
     if not set(bed_chr).issubset(set(config['pon_chr'])):
         sys.stderr.write(f"Bed file {bed_file} contains chroms not found in PanelOfNormals. Exiting..")
@@ -197,13 +199,13 @@ def check_pileup_files(config):
     checks, whether pileup files already exist and returns the chrom list for non_existing pileups
     '''
     not_piled_up = []
-        for chrom in config['chr']:
-            pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
-            pileup_file = os.path.join(pileup_folder, f"cache_{chromosome}.pileup")
-            if os.path.isfile(pileup_file):
-                print(f"Pileup file {pileup_file} found. Does not need to be built again.")
-            else:
-                not_piled_up.append(chrom)
+    for chrom in config['chr']:
+        pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
+        pileup_file = os.path.join(pileup_folder, f"cache_{chrom}.pileup")
+        if os.path.isfile(pileup_file):
+            print(f"Pileup file {pileup_file} found. Does not need to be built again.")
+        else:
+            not_piled_up.append(chrom)
     return not_piled_up
 
 def read_anno_csv(mut_file, config):
@@ -215,7 +217,7 @@ def read_anno_csv(mut_file, config):
 
     def to_int(Chr_name):
         '''
-        converts all number chromosomes to int
+        converts all number chroms to int
         '''
         try:
             return int(Chr_name)
@@ -249,14 +251,14 @@ def read_anno_csv(mut_file, config):
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
         anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
-    # retrieve chromosome list occurring in anno_file
+    # retrieve chrom list occurring in anno_file
     anno_chr = anno_df.iloc[:,0].unique()
 
     if set(anno_chr).issubset(set(config['pon_chr'])):
         # active chroms are only the ones found in the anno file and in config['chr']
         config['chr'] = list(set(anno_chr) & set(config['chr']))
-        # if chromosome is given, reduce the anno file to the provided chromosomes
-        anno_df = anno_df.query(f'Chr in {config['chr']}')
+        # if chrom is given, reduce the anno file to the provided chroms
+        anno_df = anno_df.query(f"Chr in {config['chr']}")
     else:   # raise error if unknown chroms occur in pon file
         sys.stderr.write(f"Found chromosomes in anno file {mut_file} that are not found in PanelOfNormals. Exiting..")
         sys.exit(1)
@@ -291,7 +293,7 @@ def clean_read_column(read_series):
         return read_series.str.replace(sign_re, '')
 
 
-def clean_up_df(mut_df, pon_count, config):
+def cleanup_df(mut_df, pon_count, config):
     '''
     removes indels and start/end signs from pileup data
     '''
