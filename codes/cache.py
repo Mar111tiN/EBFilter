@@ -7,7 +7,7 @@ import os
 import pandas as pd
 import numpy as np
 from .anno import anno2pileup
-from .utils import clean_up_df, cleanup_badQ, clean_read_column, sort_chr, split_bam
+from . import utils
 from .eb import get_count_df_snp
 from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
 import re
@@ -31,7 +31,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     print(f'Generating  pileup for chromosome {chromosome}..')
     pon_sub_df = pd.DataFrame()
     print(f'Splitting bam files for chromosome {chromosome}..')
-    pon_sub_df['bam'] = pon_dict['df'].apply(partial(split_bam, chromosome, pon_folder), axis=1)
+    pon_sub_df['bam'] = pon_dict['df'].apply(partial(utils.split_bam, chromosome, pon_folder), axis=1)
     # use pon_list_chr?.txt instead of the global pon_list.txt
     pon_sub_list = os.path.join(pon_folder, f"pon_list_{chromosome}.txt")
     # write the pon_list_{chr#} to file in output/pon for access by pon2pileup
@@ -76,7 +76,7 @@ def pon2pileup(pon_dict, config, pon_folder, chromosome):
     # get the read columns for the clean_columns apply
     read_columns = [f'read{i}' for i in range(pon_count)]
     # apply the cleaning function on the read rows of the pileup
-    pileup_df[read_columns] = pileup_df[read_columns].apply(clean_read_column)
+    pileup_df[read_columns] = pileup_df[read_columns].apply(utils.clean_read_column)
 
     ############## WRITE TO FILE #############################################
 
@@ -168,9 +168,9 @@ def generate_cache(pon_dict, config):
 
     ######################### PON2PILEUP ###################################
     # get the list of chromswithout existing cache file from config['chr']
-    config['chr'] = check_cache_files(config)
+    config['chr'] = utils.check_cache_files(config)
     # get the list of chroms without existing pileup_files from config['chr']
-    config['chr'] = check_pileup_files(config)
+    config['chr'] = utils.check_pileup_files(config)
 
     # init the processor pool
     cache_pool = Pool(threads)
@@ -202,7 +202,7 @@ def generate_cache(pon_dict, config):
             subprocess.check_call(['rm', '-f', pileup_file_dict['file']])
 
     # account for empty pileups with filter(None..
-    pileup_dicts = sorted(filter(None, pileup_dicts), key=sort_chr)
+    pileup_dicts = sorted(filter(None, pileup_dicts), key=utils.sort_chr)
 
     ######################### PILEUP2AB ###################################
     AB_dfs = []
@@ -308,7 +308,7 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     region_list = os.path.join(config['cache_folder'], chrom)
     snpAB_df = anno2pileup(snpAB_df, region_list, tumor_bam, None, None, config)
     # remove start/end signs
-    clean_up_df(snpAB_df, 0, config)
+    utils.cleanup_df(snpAB_df, 0, config)
     snpAB_df['EB_score'] = snpAB_df.apply(partial(get_EBscore_from_AB, config['fitting_penalty']), axis=1)
 
     return snpAB_df.loc[:,['Chr', 'Start', 'EB_score']]

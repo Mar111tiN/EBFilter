@@ -9,3 +9,5 @@ testdata2
 *.pyo
 build/
 dist/
+**/cache_pileups/
+testdata/testdata_cache/pon/*.bam
