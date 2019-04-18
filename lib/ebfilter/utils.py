@@ -77,6 +77,7 @@ def pon2chr_list(pon_df):
     '''
     generate a chrom list from the pon_list
     '''
+
     chr_set = set()
     pon_df[0].apply(lambda bam_file: chr_set.update(bam2chr_list(bam_file)))
     return list(chr_set)
@@ -113,7 +114,7 @@ def validate(file, message):
         return file
 
 
-def validate_bam(config, bam_file):
+def validate_bam(bam_file):
     '''
     file existence for bam files and accompanying bai files
     '''
@@ -123,11 +124,6 @@ def validate_bam(config, bam_file):
     if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
         sys.exit(1)
-    bam_chr = bam2chr_list(bam_file)
-    if not set(bam_chr).issubset(set(config['pon_chr'])):
-        print('bam:', set(bam_chr), 'pon:', set(config['pon_chr']))
-        sys.stderr.write(f"Tumor file {bam_file} contains chroms not found in PanelOfNormals. Exiting..")
-        sys.exit(1) 
     return bam_file
 
 
@@ -138,7 +134,7 @@ def validate_pon(pon_list, config):
     '''
     
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
-    pon_df[0].apply(partial(validate_bam, config))
+    pon_df[0].apply(validate_bam)
     config['pon_chr'] = pon2chr_list(pon_df)
     return {'list': pon_list, 'df': pon_df}
 
@@ -205,8 +201,7 @@ def check_pileup_files(config):
     not_piled_up = []
     already_piledup_dicts = []
     for chrom in config['chr']:
-        pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
-        pileup_file = os.path.join(pileup_folder, f"cache_{chrom}.pileup")
+        pileup_file = os.path.join(config['pileup_folder'], f"cache_{chrom}.pileup")
         if os.path.isfile(pileup_file):
             print(f"Pileup file {pileup_file} found. Does not need to be built again.")
             already_piledup_dicts.append({'file': pileup_file, 'chr': chrom})

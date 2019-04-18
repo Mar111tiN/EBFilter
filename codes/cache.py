@@ -47,12 +47,8 @@ def pon2pileup(pon_dict, config, chromosome):
     # optional (but highly recommended:-) bed_file for -l option
     if config['bed_file']:
         mpileup_cmd += ["-l", config['bed_file']]
-    # create the pileup folder
-    config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
-    if not os.path.isdir(pileup_folder):
-        os.mkdir(pileup_folder)
 
-    pileup_file = os.path.join(pileup_folder, f"cache_{chromosome}.pileup")
+    pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
     mpileup_cmd += ['-o', pileup_file]
     subprocess.check_call(mpileup_cmd)
 
@@ -165,10 +161,15 @@ def generate_cache(pon_dict, config):
     # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
     ####################### !!!!!!!!!!!!!!!!!!!!! ###########################
-    # get the list of chroms without existing pileup_files from config['chr'] and store the existing 
+    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
+
+    # create the pileup folder
+    config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
+    if not os.path.isdir(pileup_folder):
+        os.mkdir(pileup_folder) 
+
     # pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
-    print(pileup_chrs, pileup_file_dicts)
     # init the processor pool
     cache_pool = Pool(threads)
     # threads are mapped to the pool of chroms
