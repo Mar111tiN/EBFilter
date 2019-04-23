@@ -184,8 +184,7 @@ def check_cache_files(config):
 
     not_cached = []
     for chrom in config['chr']:
-        cache_file = os.path.join(config['cache_folder'], f"chrom.cache")
-        print(f"Checking for file {cache_file}")
+        cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
         if os.path.isfile(cache_file):
             print(f"Cache file {cache_file} found. Does not need to be generated.")
         else:
