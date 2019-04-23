@@ -8,14 +8,14 @@ import subprocess
 from subprocess import Popen, PIPE, DEVNULL
 from io import StringIO
 
-################## GLOBALS #############################################
+# ################# GLOBALS #############################################
 # regexps for start/end sign
 sign_re = re.compile(r'\^.|\$')
 # regexps for indels with a group for getting indel length
 indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
 
-############# PON2SPLITBAM ############################################
+# ############ PON2SPLITBAM ############################################
 def split_bam(chrom, pon_folder, pon_row):
     '''
     creates a sub bam file (+bai) of the specified chromosomal region per pon_list row
@@ -36,7 +36,7 @@ def validate_region(region):
     '''
     returns True if region 
     '''
-    
+
     # region format check
     if region:
         region_match = region_exp.match(region)
@@ -59,6 +59,7 @@ def sort_chr(dict):
         else:
             chr = 100
     return chr
+
 
 def bam2chr_list(bam_file):
     '''
@@ -88,9 +89,9 @@ def bed2chr_list(bed_file):
     generates a chrom list from a annotated mutation file
     '''
 
-    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0:str}, header=None, skiprows=10)
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0: str}, header=None, skiprows=10)
     # return the list of unique values from the first row (Chr row)
-    return bed_df.iloc[:,0].unique()
+    return bed_df.iloc[:, 0].unique()
 
 
 def anno2chr_list(anno_file):
@@ -98,9 +99,9 @@ def anno2chr_list(anno_file):
     generates a chrom list from a annotated mutation file
     '''
 
-    anno_df = pd.read_csv(anno_file, sep='\t', dtype={0:str}, header=None)
+    anno_df = pd.read_csv(anno_file, sep='\t', dtype={0: str}, header=None)
     # return the list of unique values from the first row (Chr row)
-    return anno_df.iloc[:,0].unique()
+    return anno_df.iloc[:, 0].unique()
 
 
 def validate(file, message):
@@ -132,7 +133,7 @@ def validate_pon(pon_list, config):
     file existence check for pon_list and the containing bam (and bai) files
     returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chroms
     '''
-    
+
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
     pon_df[0].apply(validate_bam)
     config['pon_chr'] = pon2chr_list(pon_df)
@@ -150,7 +151,6 @@ def validate_bed(bed_file, config):
         sys.stderr.write(f"Bed file {bed_file} contains chroms not found in PanelOfNormals. Exiting..")
         sys.exit(1)
     return (bed_file, bed_chr)
-
 
 
 def validate_cache(cache_folder, config):
@@ -185,6 +185,7 @@ def check_cache_files(config):
     not_cached = []
     for chrom in config['chr']:
         cache_file = os.path.join(config['cache_folder'], f"chrom.cache")
+        print(f"Checking for file {cache_file}")
         if os.path.isfile(cache_file):
             print(f"Cache file {cache_file} found. Does not need to be generated.")
         else:
@@ -210,6 +211,7 @@ def check_pileup_files(config):
 
     return not_piled_up, already_piledup_dicts
 
+
 def read_anno_csv(mut_file, config):
     '''
     reads in the mutation file and resets the relevant header columns required for dataframe operations
@@ -224,7 +226,7 @@ def read_anno_csv(mut_file, config):
         try:
             return int(Chr_name)
         except ValueError:
-            return Chr_name       
+            return Chr_name
 
     def check_columns(mut_file, anno_df, config):
         '''
@@ -246,15 +248,15 @@ def read_anno_csv(mut_file, config):
         anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
         org_columns = anno_df.columns
         check_columns(mut_file, anno_df, config)
-        anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + list(anno_df.columns[5:])
+        anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + list(anno_df.columns[5:])
     else:
-        anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0:to_int, 1:to_int, 2:to_int})
+        anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0: to_int, 1: to_int, 2: to_int})
         check_columns(mut_file, anno_df, config)
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
-        anno_df.columns = ['Chr','Start','End','Ref', 'Alt'] + rest_columns
+        anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + rest_columns
     # retrieve chrom list occurring in anno_file
-    anno_chr = anno_df.iloc[:,0].unique()
+    anno_chr = anno_df.iloc[:, 0].unique()
 
     if set(anno_chr).issubset(set(config['pon_chr'])):
         # active chroms are only the ones found in the anno file and in config['chr']
@@ -274,25 +276,25 @@ def make_region_list(mut_df, out_path, threads):
     # better to open the original file as pandas in this function
     '''
 
-    region_pd = mut_df.iloc[:,:5].copy()
-    region_pd.iloc[:,1] = mut_df.iloc[:,1] - 1 - (mut_df.iloc[:,4] == '-')
-    region_pd.iloc[:,2] = mut_df.iloc[:,1] - (mut_df.iloc[:,4] == '-')
+    region_pd = mut_df.iloc[:, :5].copy()
+    region_pd.iloc[:, 1] = mut_df.iloc[:, 1] - 1 - (mut_df.iloc[:, 4] == '-')
+    region_pd.iloc[:, 2] = mut_df.iloc[:, 1] - (mut_df.iloc[:, 4] == '-')
     # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
     outpath = os.path.splitext(out_path)[0]
-    if threads > 1: # if thread not -1
+    if threads > 1:     # if thread not -1
         outpath += f"_{os.getpid()}"
     outpath += ".region_list.bed"
-    region_pd.iloc[:,:3].to_csv(outpath, sep='\t', header=None, index=False)
-    return outpath    
+    region_pd.iloc[:, :3].to_csv(outpath, sep='\t', header=None, index=False)
+    return outpath
 
 
 def clean_read_column(read_series):
-        '''
-        removes per column all reads with start/end signs
-        '''
+    '''
+    removes per column all reads with start/end signs
+    '''
 
-        # should include indel removal as well?
-        return read_series.str.replace(sign_re, '')
+    # should include indel removal as well?
+    return read_series.str.replace(sign_re, '')
 
 
 def cleanup_df(mut_df, pon_count, config):
@@ -306,7 +308,6 @@ def cleanup_df(mut_df, pon_count, config):
         mut_df[read] = mut_df[read].str.replace(sign_re, '')
 
     is_indel = (mut_df['Ref'] == '-') | (mut_df['Alt'] == '-')
-
 
     def remove_indels(read, length):
         '''
@@ -346,11 +347,11 @@ def cleanup_df(mut_df, pon_count, config):
 
     # only clean up other columns if pon pileup is used (non cache_mode)
     if not config['cache_mode']:
-    # apply partial clean_indels to remove indel traces in pileup
+        # apply partial clean_indels to remove indel traces in pileup
         mut_df[is_indel] = mut_df[is_indel].apply(partial(clean_indels, pon_count), axis=1)
-    # in case there are indels only in the control files
+        # in case there are indels only in the control files
 
-        for i in range(pon_count):        
+        for i in range(pon_count):
             read = f"read{i+1}"
             Q = f"Q{i+1}"
             # boolean mask for non-fitting read-Q-pairs
@@ -372,7 +373,7 @@ def cleanup_badQ(mut_df, pon_count, filters):
     filter_string = r"([" + filters + "])"
     filter_re = re.compile(filter_string)
 
-    def remove_badQ(i,row):
+    def remove_badQ(i, row):
         '''
         used as partial callable within the pd.apply
         '''
@@ -381,9 +382,9 @@ def cleanup_badQ(mut_df, pon_count, filters):
         while filter_re.search(Q):
             m = filter_re.search(Q)
             Q = filter_re.sub('', Q, count=1)
-            pos = max(m.start(),m.end()-1)
+            pos = max(m.start(), m.end()-1)
             read = read[:pos] + read[pos+1:]
-        return row   
+        return row
     # set boolean mask for snp (we ignore indels)
     is_snp = (mut_df['Ref'] != '-') & (mut_df['Alt'] != '-')
     for i in range(pon_count):

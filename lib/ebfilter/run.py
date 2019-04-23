@@ -19,21 +19,21 @@ def main(args, config):
     '''
     validates files and refers to respective functions
     '''
-    
-    ############### ARGUMENTS and CONFIG ##################################
+
+    # ############## ARGUMENTS and CONFIG ##################################
     config['cache_mode'] = False
     config['generate_cache'] = args['generate_cache'] if 'generate_cache' in args.keys() else False
 
     threads = config['threads']
     debug_mode = config['debug_mode']
     # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
-    pon_dict = utils.validate_pon(args['pon_list'], config) 
+    pon_dict = utils.validate_pon(args['pon_list'], config)
 
-    ###### set chromosome ########################### 
+    # ##### set chromosome ###########################
     # set config['chr'] to chromosome if provided in makeEBcache
     config['chr'] = [args['chrom']] if 'chrom' in args.keys() else config['pon_chr']
     # set config['chr'] to region if provided in EBscore
-    region = args['region'] if 'region' in args.keys() else ''   
+    region = args['region'] if 'region' in args.keys() else ''
     if region:
         config['chr'] == region.split(':')[0]
     if not set(config['chr']).issubset(set(config['pon_chr'])):
@@ -42,21 +42,20 @@ def main(args, config):
         ''')
         sys.exit(1)
     # else config['chr'] is the one selected chromosome
-            
 
-    ##################### --> GENERATE CACHE ###################
+    # #################### --> GENERATE CACHE ###################
     if config['generate_cache']:
 
-        ###### set cache folder #########################    
+        # ##### set cache folder #########################
         if 'cache_folder' in args.keys():
             config['cache_folder'] = cache_folder = args['cache_folder']
         else:
-        # if no cache folder is provided, pon_list folder is used
+            # if no cache folder is provided, pon_list folder is used
             config['cache_folder'] = os.path.join(os.path.dirname(pon_dict['list']), f"EBcache_{os.path.splitext(pon_dict['list'][0])}")
         if not os.path.isdir(cache_folder):
             os.mkdir(cache_folder)
 
-        ###### set bed file #############################
+        # ##### set bed file #############################
         # validate bed file and get the chromosomes needed for caching
         bed_file = args['bed_file'] if 'bed_file' in args.keys() else None
         if bed_file:
@@ -68,9 +67,9 @@ def main(args, config):
             # if restricted chrom is not in bed file
             else:
                 print(f'Chromosome {config["chr"]} is not in bed file. Nothing to do here.')
-                return 
-        else: # no bed_file
-            # write empty 
+                return
+        else:   # no bed_file
+            # write empty
             if args['force_caching']:
                 config['bed_file'], config['bed_chr'] = None, []
             else:
@@ -83,7 +82,7 @@ def main(args, config):
         print(success)
         return
 
-    ##################### EBscore ###################
+    # #################### EBscore ###################
     # implicit else:
     cache_folder = args['use_cache'] if 'use_cache' in args.keys() else None
     if cache_folder:
@@ -91,8 +90,8 @@ def main(args, config):
         # ..existing cache files --> stored in config
         config['cache_folder'], config['cache_chr'] = utils.validate_cache(cache_folder, config)
         config['cache_mode'] = True
-        print('Running EBscore in EBcache mode...')          
-        
+        print('Running EBscore in EBcache mode...')
+
     # get arguments for EBscore
     mut_file = utils.validate(args['mut_file'], "No target mutation file")
     config['sep'] = args['sep'] if 'sep' in args.keys() else '\t'
@@ -101,10 +100,10 @@ def main(args, config):
 
     # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
     tumor_bam = utils.validate_bam(config, args['tumor_bam'])
-    output_path = args['output_path']   
+    output_path = args['output_path']
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
-    
-    ##################### EBscore ANNO ###################   
+
+    # #################### EBscore ANNO ###################
     if is_anno:
         print(f'Loading annotation file {mut_file}..')
         # create anno_df, store original other info and get anno_chr list
@@ -112,10 +111,10 @@ def main(args, config):
         # create small copy for working with
         mut_df = anno_df[anno_df.columns[:5]].copy()
 
-        ############### CACHE MODE ###############
+        # ############## CACHE MODE ###############
         EB_dfs = []
         if config['cache_mode']:
-        ################# CACHE RETRIEVAL ####################################
+            # ################ CACHE RETRIEVAL ####################################
             # do multi-threaded merging of the different AB_files per chromosome
 
             # get the SNPs for the annotation
@@ -133,7 +132,7 @@ def main(args, config):
             # store EBscored dfs in EB_dfs
             EB_dfs += mut_EBs
 
-        ################# NOT CACHE MODE // INDELS IN CACHE MODE ############### 
+        # ################ NOT CACHE MODE // INDELS IN CACHE MODE ###############
             # reduce mut_df to the remaining indel occurrences and uncached chroms for anno worker
             mut_df = mut_df.query(f'(Ref == "-" or Alt == "-") and Chr not in {config["cache_chr"]}')
         # if all are snps, mut_df is now empty after caching and would raise error in if clause
@@ -164,12 +163,12 @@ def main(args, config):
         print(f'Writing annotation file {output_path} with EBscores to disc..')
         final_df.to_csv(output_path, sep='\t', index=False)
 
-        ################ DEBUG #####################################
+        # ############### DEBUG #####################################
         if config['debug_mode']:
             out_file = output_path.replace('eb', "eb_only")
             EB_df.to_csv(out_file, sep=config['sep'], index=False)
-        ############## ##############################################     
+        # ############# ##############################################
         print('EBscore is finished!')
 
-    else: # is_anno is False
+    else:   # is_anno is False
         print('EBFilter is not YET compatible with .vcf files. ')
