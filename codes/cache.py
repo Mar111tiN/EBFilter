@@ -173,18 +173,21 @@ def generate_cache(pon_dict, config):
 
     # pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
-    # init the processor pool
-    cache_pool = Pool(threads)
-    # threads are mapped to the pool of chroms
 
-    # ##################### !!!! multiprocessing.Pool can only transfer data up to a certain size
-    # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
-    success_messages = []
-    # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
-    pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
-    # remove Nones and sort for chromosome name
-    cache_pool.close()
-    cache_pool.join()
+    # if still some pileups remain
+    if len(pileup_chrs):
+        # init the processor pool
+        cache_pool = Pool(threads)
+        # threads are mapped to the pool of chroms
+
+        # ##################### !!!! multiprocessing.Pool can only transfer data up to a certain size
+        # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
+        success_messages = []
+        # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
+        pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
+
+        cache_pool.close()
+        cache_pool.join()
 
     # reading the pileup files into dfs
     pileup_dicts = []
@@ -193,8 +196,7 @@ def generate_cache(pon_dict, config):
             pileup_dicts.append({'chr': pileup_file_dict['chr'], 'empty': True})
             continue
         pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
-
-        print(f"Reading pileup {pileup_file_dict['file']} for AB computation")
+        print(f"Reading pileup {pileup_file_dict['file']} into memory for AB computation")
         pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr'], 'empty': False}
         pileup_dicts.append(pileup_dict)
 
