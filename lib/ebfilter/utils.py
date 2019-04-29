@@ -120,7 +120,6 @@ def validate_bam(bam_file):
     file existence for bam files and accompanying bai files
     '''
 
-    print(f"validating {bam_file}")
     validate(bam_file, "No control bam file")
     if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
@@ -134,6 +133,7 @@ def validate_pon(pon_list, config):
     returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chroms
     '''
 
+    print(f"Validating PoN list {pon_list}..")
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
     pon_df[0].apply(validate_bam)
     config['pon_chr'] = pon2chr_list(pon_df)
