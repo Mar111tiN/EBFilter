@@ -12,6 +12,7 @@ from .eb import get_count_df_snp
 from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
 import re
 import math
+from datetime import datetime as dt
 
 sign_re = re.compile(r'\^.|\$')
 acgt = ['A', 'C', 'T', 'G']
@@ -28,7 +29,7 @@ def pon2pileup(pon_dict, config, chromosome):
     pon_folder = config['pon_folder']
     # create a chromosome-bound bam and bai for each bam in the pon_list
     # write the created bams to a dataframe and output as pon_list
-    print(f"Generating  pileup for chromosome {chromosome}..")
+    print(f"{dt.now().strftime('%H:%M:%S')}: Generating  pileup for chromosome {chromosome}..")
     pon_sub_df = pd.DataFrame()
     print(f'Splitting bam files for chromosome {chromosome}..')
     pon_sub_df['bam'] = pon_dict['df'].apply(partial(utils.split_bam, chromosome, pon_folder), axis=1)
@@ -76,7 +77,7 @@ def pon2pileup(pon_dict, config, chromosome):
 
     # ############# WRITE TO FILE #############################################
     # write the pileup df to csv as <cache_folder>/ab_cache[_chr1].pileup
-    print(f"Writing pileup of Chr {chromosome} to file {pileup_file}")
+    print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
     return {'file': pileup_file, 'chr': chromosome}
@@ -106,6 +107,7 @@ def pileup2AB(config, chromosome, pileup_df):
 
         # ########## get count matrix ###########################################
         for var in acgt:
+
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
             # get the AB parameters for 
@@ -155,12 +157,16 @@ def generate_cache(pon_dict, config):
     config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
     if not os.path.isdir(pon_folder):
         os.mkdir(pon_folder)
-
+    start = dt.now()
     # ######################## PON2PILEUP ###################################
     # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
     if len(config['chr']):
-        print(f"Generating Cache for chromosomes {' '.join(config['chr'])}.. ")
+        now = start.strftime('%Y-%m-%d %H:%M:%S')
+        suf = 's'
+        if len(config['chr']) == 1:
+            suf = ''
+        print(f"{now} Generating Cache for chromosome{suf} {' '.join(config['chr'])}.. ")
     else:
         return "Everything is there. No need for computation."
     # ###################### !!!!!!!!!!!!!!!!!!!!! ###########################
@@ -173,18 +179,21 @@ def generate_cache(pon_dict, config):
 
     # pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
-    # init the processor pool
-    cache_pool = Pool(threads)
-    # threads are mapped to the pool of chroms
 
-    # ##################### !!!! multiprocessing.Pool can only transfer data up to a certain size
-    # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
-    success_messages = []
-    # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
-    pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
-    # remove Nones and sort for chromosome name
-    cache_pool.close()
-    cache_pool.join()
+    # if still some pileups remain
+    if len(pileup_chrs):
+        # init the processor pool
+        cache_pool = Pool(threads)
+        # threads are mapped to the pool of chroms
+
+        # ##################### !!!! multiprocessing.Pool can only transfer data up to a certain size
+        # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
+        success_messages = []
+        # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
+        pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
+
+        cache_pool.close()
+        cache_pool.join()
 
     # reading the pileup files into dfs
     pileup_dicts = []
@@ -193,8 +202,7 @@ def generate_cache(pon_dict, config):
             pileup_dicts.append({'chr': pileup_file_dict['chr'], 'empty': True})
             continue
         pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
-
-        print(f"Reading pileup {pileup_file_dict['file']} for AB computation")
+        print(f"{dt.now().strftime('%H:%M:%S')}: Reading pileup {pileup_file_dict['file']} into memory for AB computation")
         pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr'], 'empty': False}
         pileup_dicts.append(pileup_dict)
 
@@ -222,7 +230,7 @@ def generate_cache(pon_dict, config):
         # set the minimum number of lines for one thread to 2000
         split_factor = min(math.ceil(chr_len / 2000), threads)
         if split_factor > 1:
-            print(f"Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..")
+            print(f"{dt.now().strftime('%H:%M:%S')}: Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..")
         # split the arrays into litte fractions for computation
         pileup_split = np.array_split(pileup_dict['df'], split_factor)
         pileup2AB_pool = Pool(threads)
@@ -235,7 +243,7 @@ def generate_cache(pon_dict, config):
 
         # ############## OUTPUT ###########################################################
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
-        print(f"Writing ABcache for Chr {chromosome} to file {chr_cache}.")
+        print(f"{dt.now().strftime('%H:%M:%S')}: Writing ABcache for Chr {chromosome} to file {chr_cache}.")
         AB_chr_df.to_csv(chr_cache, sep=',', index=False)
 
         AB_df = pd.concat(AB_dfs)
@@ -248,7 +256,7 @@ def generate_cache(pon_dict, config):
         subprocess.check_call(['rm', '-r', config['pileup_folder']])
     #########################################################################################
 
-    return 'Generation of AB file finished.'
+    return f"{dt.now().strftime('%H:%M:%S')}: Generation of AB file finished."
 
 
 def get_EBscore_from_AB(pen, row):

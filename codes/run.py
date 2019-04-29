@@ -13,6 +13,7 @@ from . import utils
 from . import anno
 from . import vcf
 from .cache import generate_cache, get_EB_from_cache
+from datetime import datetime as dt
 
 
 def main(args, config):
