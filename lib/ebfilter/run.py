@@ -100,7 +100,7 @@ def main(args, config):
         print(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..')
 
     # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
-    tumor_bam = utils.validate_bam(config, args['tumor_bam'])
+    tumor_bam = utils.validate_bam(args['tumor_bam'])
     output_path = args['output_path']
     is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
 
