@@ -227,10 +227,12 @@ def generate_cache(pon_dict, config):
             open(chr_cache, 'a').close()
             continue
         chr_len = len(pileup_dict['df'].index)      # get length for progress info
+        # increased number of chunks to prevent memory issues in cluster
+        FACTOR = 10
         # set the minimum number of lines for one thread to 2000
-        split_factor = min(math.ceil(chr_len / 2000), threads * 10) # increased number of chunks to prevent memory issues in cluster
+        split_factor = min(math.ceil(chr_len / 2000), threads * FACTOR)
         if split_factor > 1:
-            print(f"{dt.now().strftime('%H:%M:%S')}: Splitting the {chr_len} lines of {chromosome}.pileup into {threads} chunks for multithreaded computation..")
+            print(f"{dt.now().strftime('%H:%M:%S')}: Splitting the {chr_len} lines of {chromosome}.pileup into {threads * FACTOR} chunks for multithreaded computation..")
         # split the arrays into litte fractions for computation
         pileup_split = np.array_split(pileup_dict['df'], split_factor)
         pileup2AB_pool = Pool(threads)
