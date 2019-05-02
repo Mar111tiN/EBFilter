@@ -77,6 +77,8 @@ def pon2pileup(pon_dict, config, chromosome):
 
     # ############# WRITE TO FILE #############################################
     # write the pileup df to csv as <cache_folder>/ab_cache[_chr1].pileup
+
+    # fragment the pileup at this stage using numpy array to only get chunks into memory
     print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
@@ -158,6 +160,7 @@ def generate_cache(pon_dict, config):
     if not os.path.isdir(pon_folder):
         os.mkdir(pon_folder)
     start = dt.now()
+
     # ######################## PON2PILEUP ###################################
     # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
