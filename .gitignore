@@ -4,6 +4,7 @@ output
 testinput
 test
 testdata2
+cluster_data
 **/__pycache__/
 *.pyc
 *.pyo

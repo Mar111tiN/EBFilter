@@ -2,58 +2,56 @@
 
 from ebfilter.run import main
 import argparse
-import os
-import sys
 
-parser = argparse.ArgumentParser(prog = "EBscore")
+parser = argparse.ArgumentParser(prog="EBscore")
 
-parser.add_argument("--version", action = "version", version = "EBFilter-1.0.0")
+parser.add_argument("--version", action="version", version="EBFilter-1.0.0")
 
-parser.add_argument('-t', metavar = "thread_num", default='1', type=int,
-                    help = "the number of threads")
+parser.add_argument('-t', metavar="thread_num", default='1', type=int,
+                    help="the number of threads")
 
-################################## I/O ###################################################
+# ################################# I/O ###################################################
 
-parser.add_argument("mut_file", metavar = "target.anno", type = str,
-                          help = "the path to the mutation file (.vcf or .csv/.anno)")
+parser.add_argument("mut_file", metavar="target.anno", type=str,
+                    help="the path to the mutation file (.vcf or .csv/.anno)")
 
-parser.add_argument("tumor_bam", metavar = "target.bam", type = str,
-                          help = "the path to the target bam file (+ .bai)")
+parser.add_argument("tumor_bam", metavar="target.bam", type=str,
+                    help="the path to the target bam file (+ .bai)")
 
-parser.add_argument("pon_list", metavar = "PanelOfNormals_list.txt", type = str,
-                          help = "the list of paths to control bam files (+ .bai)")
+parser.add_argument("pon_list", metavar="PanelOfNormals_list.txt", type=str,
+                    help="the list of paths to control bam files (+ .bai)")
 
-parser.add_argument("output_path", metavar = "output.anno", type = str,
-                          help = "the path to the final output with added EBscore columns")
+parser.add_argument("output_path", metavar="output.anno", type=str,
+                    help="the path to the final output with added EBscore columns")
 
-parser.add_argument("-sep", choices=['comma', 'tab'], type = str, default='tab',
-                          help = "the separator for the annotation csv (comma or tab)")
+parser.add_argument("-sep", choices=['comma', 'tab'], type=str, default='tab',
+                    help="the separator for the annotation csv (comma or tab)")
 
-################################## EB CACHING ###################################################
+# ################################# EB CACHING ###################################################
 
-parser.add_argument("-use_cache", metavar = "EB_cache_folder", type = str, 
-                    help = "optional path to the folder keeping the EBcache files\n A valid cache folder will switch on cache mode")
+parser.add_argument("-use_cache", metavar="EB_cache_folder", type=str,
+                    help="optional path to the folder keeping the EBcache files\n A valid cache folder will switch on cache mode")
 
-################################## PILEUP PARAMS ############################################
-parser.add_argument('-q', metavar = "mapping_qual_thres", default='20', type=int,
-                    help = "threshold for mapping quality for calculating base counts")
+# ################################# PILEUP PARAMS ############################################
+parser.add_argument('-q', metavar="mapping_qual_thres", default='20', type=int,
+                    help="threshold for mapping quality for calculating base counts")
 
-parser.add_argument('-Q', metavar = "base_qual_thres", default='15', type=int,
-                    help = "base quality threshold for calculating base counts")
+parser.add_argument('-Q', metavar="base_qual_thres", default='15', type=int,
+                    help="base quality threshold for calculating base counts")
 
-parser.add_argument('--ff', metavar = "filter_flags", default='UNMAP,SECONDARY,QCFAIL,DUP', type=str,
-                    help = "skip reads with mask bits set")
+parser.add_argument('--ff', metavar="filter_flags", default='UNMAP,SECONDARY,QCFAIL,DUP', type=str,
+                    help="skip reads with mask bits set")
 
-parser.add_argument("--region", default = '', type = str,
-                    help = "restrict the chromosomal region for mutation")
+parser.add_argument("--region", default='', type=str,
+                    help="restrict the chromosomal region for mutation")
 
-################################## BETA-BINOMIAL ############################################
-parser.add_argument('-fit_with', metavar = "penalty_term_for_fitting", default='0.5', type=float,
-                    help = "penalty term for beta binomial fitting parameters")
+# ################################# BETA-BINOMIAL ############################################
+parser.add_argument('-fit_with', metavar="penalty_term_for_fitting", default='0.5', type=float,
+                    help="penalty term for beta binomial fitting parameters")
 
-################################# DEBUG #####################################################
+# ################################ DEBUG #####################################################
 
-parser.add_argument("--debug", default = False, action = 'store_true', help = "keep intermediate files")
+parser.add_argument("--debug", default=False, action='store_true', help="keep intermediate files")
 
 args = parser.parse_args()
 
@@ -61,7 +59,7 @@ args = parser.parse_args()
 config = {}
 config['threads'] = args.t
 config['debug_mode'] = args.debug
-config['sep'] = '\t' if args.sep == 'tab' else ','
+config['sep'] = ',' if args.sep == 'comma' else '\t'
 config['ff'] = args.ff
 config['q'] = args.q
 config['Q'] = args.Q
@@ -69,8 +67,8 @@ config['ff'] = args.ff
 config['fitting_penalty'] = args.fit_with
 
 filter_quals = ''
-for qual in range( 33, 33 + args.Q): 
-    filter_quals += chr( qual ) 
+for qual in range(33, 33 + args.Q):
+    filter_quals += chr(qual)
 config['filter_quals'] = filter_quals
 
 # transfer the args attributes into dictionary for access by main()
@@ -78,11 +76,3 @@ args_dict = vars(args)
 args_dict['generate_cache'] = False
 
 main(args_dict, config)
-
-
-
-
-
-
-
-

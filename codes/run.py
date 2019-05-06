@@ -96,8 +96,8 @@ def main(args, config):
 
     # get arguments for EBscore
     mut_file = utils.validate(args['mut_file'], "No target mutation file")
-    config['sep'] = args['sep'] if 'sep' in args.keys() else '\t'
-    if not config['sep'] in [',', '\t', ':']:
+    print('SEP:', config['sep'])
+    if not config['sep'] in [',', '\t']:
         print(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..')
 
     # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
