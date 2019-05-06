@@ -203,8 +203,9 @@ def check_pileup_files(config):
     for chrom in config['chr']:
         pileup_file = os.path.join(config['pileup_folder'], f"cache_{chrom}.pileup")
         if os.path.isfile(pileup_file):
+            pile_len = len(pd.read_csv(pileup_file, sep='\t').index)
             print(f"Pileup file {pileup_file} found. Does not need to be built again.")
-            already_piledup_dicts.append({'file': pileup_file, 'chr': chrom})
+            already_piledup_dicts.append({'file': pileup_file, 'chr': chrom, 'pileup_len': pile_len})
         else:
             not_piled_up.append(chrom)
 

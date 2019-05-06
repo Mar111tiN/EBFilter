@@ -29,12 +29,12 @@ def pon2pileup(pon_dict, config, chromosome):
     pon_folder = config['pon_folder']
     # create a chromosome-bound bam and bai for each bam in the pon_list
     # write the created bams to a dataframe and output as pon_list
-    print(f"{dt.now().strftime('%H:%M:%S')}: Generating  pileup for chromosome {chromosome}..")
     pon_sub_df = pd.DataFrame()
-    print(f'Splitting bam files for chromosome {chromosome}..')
+    print(f"{dt.now().strftime('%H:%M:%S')} Splitting bam files of PoN for chromosome {chromosome}..")
     pon_sub_df['bam'] = pon_dict['df'].apply(partial(utils.split_bam, chromosome, pon_folder), axis=1)
     # use pon_list_chr?.txt instead of the global pon_list.txt
     pon_sub_list = os.path.join(pon_folder, f"pon_list_{chromosome}.txt")
+    print(f"{dt.now().strftime('%H:%M:%S')} Writing pon list for chromosome {chromosome}..")
     # write the pon_list_{chr#} to file in output/pon for access by pon2pileup
     pon_sub_df.to_csv(pon_sub_list, header=None, index=False)
 
@@ -48,24 +48,23 @@ def pon2pileup(pon_dict, config, chromosome):
     if config['bed_file']:
         mpileup_cmd += ["-l", config['bed_file']]
 
-    pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
-    mpileup_cmd += ['-o', pileup_file]
-    subprocess.check_call(mpileup_cmd)
-
-# ##################### THE BETTER (but not working) WAY #######################
-    # # use StringIO for small files (not implemented)
-    # else:
-    #     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
-    #     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
+    # pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
+    # mpileup_cmd += ['-o', pileup_file]
+    print(f"{dt.now().strftime('%H:%M:%S')} Generating pileup for chromosome {chromosome}..")
+    # subprocess.check_call(mpileup_cmd)
+    pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
+    pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
 ###############################################################################
 
     names = ['Chr', 'Start', 'Ref']
     for i in range(pon_count):
         names += [f"depth{i}", f"read{i}", f"Q{i}"]
+    # read StringIO object from stream into pileup_df in memory
     pileup_df = pd.read_csv(pileup_file, sep='\t', header=None, names=names)
-    if len(pileup_df.index) == 0:
+    pileup_len = len(pileup_df.index)
+    if pileup_len == 0:
         print(f"Pileup for chromosome {chromosome} is empty and will be dropped..")
-        return {'file': 'empty', 'chr': chromosome}
+        return {'file': 'empty', 'chr': chromosome, 'pileup_len': 0}
 
     # ############# CLEANUP PILEUP #######################################
     # get the count from the number of columns of pileup_df
@@ -77,13 +76,23 @@ def pon2pileup(pon_dict, config, chromosome):
 
     # ############# WRITE TO FILE #############################################
     # write the pileup df to csv as <cache_folder>/ab_cache[_chr1].pileup
+
+    # fragment the pileup at this stage using numpy array to only get chunks into memory
+    pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
     print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
-    return {'file': pileup_file, 'chr': chromosome}
+    ###########################
+    # Here, I could try to already pass the df_chunk generator to then be used directly by the AB-pool 
+    # this should circumvent the data limit of the subprocess pool:
+        # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
+        # pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=1000)
+
+    ##########################
+    return {'file': pileup_file, 'chr': chromosome, 'pileup_len': pileup_len}
 
 
-def pileup2AB(config, chromosome, pileup_df):
+def pileup2AB(config, chromosome, chr_len, pileup_df):
     '''
     creates the AB_df for a pileup
     '''
@@ -92,22 +101,15 @@ def pileup2AB(config, chromosome, pileup_df):
     # create a copy of just the Chr and Start coords to store the AB values in
     AB_df = pileup_df.iloc[:, [0, 1]].copy()
 
-    def get_AB(penalty, length, start, chromosome, row):
+    def get_AB(penalty, row):
         '''
         returns the AB parameters (A+a A+b A-a A-b G+a G+b....) for each pileup row
+        main computational load
         '''
 
         bb_s = pd.Series()
-        # ########## Progress Bar ###############################################
-        if (row.name - start) % 2500 == 0 and (row.name - start) > 0:
-            bar_size = 25
-            frac = (int(row.name) - start) / length
-            progress = '|' + '.' * math.floor(frac * bar_size) + ' ' * math.ceil(bar_size * (1 - frac)) + '|'
-            print(f"P{os.getpid()}: {row.name - start} lines (total {round(frac * 100, 1)}% of Chr {chromosome.replace('chr', '').replace('Chr', '')}) processed\t {progress}")
-
         # ########## get count matrix ###########################################
         for var in acgt:
-
             # get the count matrix
             count_df = get_count_df_snp(row, var, 4)
             # get the AB parameters for 
@@ -125,9 +127,11 @@ def pileup2AB(config, chromosome, pileup_df):
     var_columns = [f'{var}{strand}{param}' for var in acgt for strand in ['+', '-'] for param in ['a', 'b']]
     pileup_length = len(pileup_df.index)
     pileup_start = pileup_df.iloc[0].name
-    print(f'Process {os.getpid()}: Computing ABs for Chr {chromosome} \t(lines {pileup_start }\t to \t{pileup_length + pileup_start})')
-    AB_df[var_columns] = pileup_df.apply(partial(get_AB, config['fitting_penalty'], pileup_length, pileup_start, chromosome), axis=1)
-    print(f'Process {os.getpid()}: Computing ABs for chromosome {chromosome} (lines {pileup_start } to {pileup_length + pileup_start}) finished.')
+    frac = pileup_start / chr_len
+    bar_size = 25
+    progress_bar = '|' + '.' * math.ceil(frac * bar_size) + ' ' * math.floor(bar_size * (1 - frac)) + '|'
+    print(f'Process {os.getpid()}: {pileup_start } lines ({round(frac * 100, 1)}%) of Chr {chromosome}.\t{progress_bar}')
+    AB_df[var_columns] = pileup_df.apply(partial(get_AB, config['fitting_penalty']), axis=1)
 
     # ##################### DEBUG #######################################################
     if config['debug_mode']:
@@ -151,59 +155,55 @@ def generate_cache(pon_dict, config):
     create a cache file for ab-parameters
     '''
 
-    threads = config['threads']
-
-    # make directory for temporary bam files
-    config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
-    if not os.path.isdir(pon_folder):
-        os.mkdir(pon_folder)
-    start = dt.now()
-    # ######################## PON2PILEUP ###################################
+    # #####################INIT + VALIDATION #########################
     # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
     if len(config['chr']):
-        now = start.strftime('%Y-%m-%d %H:%M:%S')
+        now = dt.now().strftime('%Y-%m-%d %H:%M:%S')
         suf = 's'
         if len(config['chr']) == 1:
             suf = ''
         print(f"{now} Generating Cache for chromosome{suf} {' '.join(config['chr'])}.. ")
     else:
         return "Everything is there. No need for computation."
-    # ###################### !!!!!!!!!!!!!!!!!!!!! ###########################
-    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
 
-    # create the pileup folder
+    threads = config['threads']
+
+    # ######################## PON2PILEUP ###################################
     config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
-    if not os.path.isdir(pileup_folder):
-        os.mkdir(pileup_folder)
-
+    config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
+    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
     # pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
 
     # if still some pileups remain
     if len(pileup_chrs):
+        # make directory for temporary bam and pileup files(only if pileups are missing)
+        if not os.path.isdir(pon_folder):
+            os.mkdir(pon_folder)
+        if not os.path.isdir(pileup_folder):
+            os.mkdir(pileup_folder)
+
         # init the processor pool
-        cache_pool = Pool(threads)
+        pileup_pool = Pool(threads)
         # threads are mapped to the pool of chroms
 
         # ##################### !!!! multiprocessing.Pool can only transfer data up to a certain size
-        # pileup_file_dicts stores the list of pileup file dictionaries [{'file': 'chr11.pileup', 'chr': 'chr11'}, {'file': 'chr2.pileup', 'chr': 'chr2'} ]
+        # pileup_file_dicts stores the list of pileup file dictionaries
+        # [{'file': 'chr11.pileup', 'chr': 'chr11', 'pile_len': 2341234}, {'file': 'chr2.pileup', 'chr': 'chr2', 'pile_len':s23433} ]
         success_messages = []
         # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
-        pileup_file_dicts += cache_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
+        pileup_file_dicts += pileup_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
+        pileup_pool.close()
+        pileup_pool.join()
 
-        cache_pool.close()
-        cache_pool.join()
-
-    # reading the pileup files into dfs
+    # reading the pileup files into df generators
     pileup_dicts = []
     for pileup_file_dict in pileup_file_dicts:
-        if pileup_file_dict['file'] == 'empty':
-            pileup_dicts.append({'chr': pileup_file_dict['chr'], 'empty': True})
-            continue
-        pileup_df = pd.read_csv(pileup_file_dict['file'], sep='\t')
-        print(f"{dt.now().strftime('%H:%M:%S')}: Reading pileup {pileup_file_dict['file']} into memory for AB computation")
-        pileup_dict = {'df': pileup_df, 'chr': pileup_file_dict['chr'], 'empty': False}
+        # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
+        pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=10000)
+        print(f"{dt.now().strftime('%H:%M:%S')}: Reading pileup {pileup_file_dict['file']} for AB computation")
+        pileup_dict = {'df': pileup_dfgen, 'chr': pileup_file_dict['chr'], 'pileup_len': pileup_file_dict['pileup_len']}
         pileup_dicts.append(pileup_dict)
 
         # ######### DEBUG ####################################
@@ -211,7 +211,7 @@ def generate_cache(pon_dict, config):
             subprocess.check_call(['rm', '-f', pileup_file_dict['file']])
         #####################################################
 
-    # account for empty pileups with filter(None..
+    # account for empty pileups with filter (None..
     pileup_dicts = sorted(filter(None, pileup_dicts), key=utils.sort_chr)
 
     # ######################## PILEUP2AB ###################################
@@ -221,22 +221,18 @@ def generate_cache(pon_dict, config):
     # create the job pool for the threads
     for pileup_dict in pileup_dicts:
         chromosome = pileup_dict['chr']
+        # why not working every round
+        # processed = 0
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
-        if pileup_dict['empty']:
+        # accomodate for empty pileups (should not be neccessary because of validation)
+        if not pileup_dict['pileup_len']:
             print(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
             open(chr_cache, 'a').close()
             continue
-        chr_len = len(pileup_dict['df'].index)      # get length for progress info
-        # increased number of chunks to prevent memory issues in cluster
-        FACTOR = 10
-        # set the minimum number of lines for one thread to 2000
-        split_factor = min(math.ceil(chr_len / 2000), threads * FACTOR)
-        if split_factor > 1:
-            print(f"{dt.now().strftime('%H:%M:%S')}: Splitting the {chr_len} lines of {chromosome}.pileup into {threads * FACTOR} chunks for multithreaded computation..")
-        # split the arrays into litte fractions for computation
-        pileup_split = np.array_split(pileup_dict['df'], split_factor)
+        chr_len = pileup_dict['pileup_len']  # get length for progress info
         pileup2AB_pool = Pool(threads)
-        AB_chr_dfs = pileup2AB_pool.map(partial(pileup2AB, config, chromosome), pileup_split)
+        # pass in the chunked-up df generator to the pool
+        AB_chr_dfs = pileup2AB_pool.imap(partial(pileup2AB, config, chromosome, chr_len), pileup_dict['df'])
         pileup2AB_pool.close()
         pileup2AB_pool.join()
         # concatenate the AB_dfs for each chromosome to AB_chr_df
