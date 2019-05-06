@@ -54,7 +54,7 @@ def pon2pileup(pon_dict, config, chromosome):
     # subprocess.check_call(mpileup_cmd)
     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
-###############################################################################
+    ###############################################################################
 
     names = ['Chr', 'Start', 'Ref']
     for i in range(pon_count):
@@ -82,13 +82,20 @@ def pon2pileup(pon_dict, config, chromosome):
     print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
-    ###########################
-    # Here, I could try to already pass the df_chunk generator to then be used directly by the AB-pool 
+    # ########################## !!!!!!!!!!!!!! ################################
+    # Here, I could try to already pass the df_chunk generator to then be used directly by the AB-pool
     # this should circumvent the data limit of the subprocess pool:
-        # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
-        # pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=1000)
+    # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
+    # pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=1000)
+    ##########################################################################
 
-    ##########################
+    # ############################ DEBUG ######################################
+    if not config['debug_mode']:
+        # delete the split_bam pon list
+        subprocess.check_call(['rm', pon_sub_list])
+        pon_sub_df['bam'].apply(utils.delete_pom_bams)
+    ##########################################################################
+
     return {'file': pileup_file, 'chr': chromosome, 'pileup_len': pileup_len}
 
 
@@ -215,7 +222,6 @@ def generate_cache(pon_dict, config):
     pileup_dicts = sorted(filter(None, pileup_dicts), key=utils.sort_chr)
 
     # ######################## PILEUP2AB ###################################
-    AB_dfs = []
     # split the pileups for each Chr into threaded chunks to even out different chromosome sizes
     # go through each chromosome with required number of threads
     # create the job pool for the threads
@@ -237,21 +243,13 @@ def generate_cache(pon_dict, config):
         pileup2AB_pool.join()
         # concatenate the AB_dfs for each chromosome to AB_chr_df
         AB_chr_df = pd.concat(AB_chr_dfs)
-        AB_dfs.append(AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]]))
+        AB_chr_df = AB_chr_df.sort_values([AB_chr_df.columns[0], AB_chr_df.columns[1]])
 
         # ############## OUTPUT ###########################################################
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
         print(f"{dt.now().strftime('%H:%M:%S')}: Writing ABcache for Chr {chromosome} to file {chr_cache}.")
-        AB_chr_df.to_csv(chr_cache, sep=',', index=False)
+        AB_chr_df.to_csv(chr_cache, sep=',', index=False, compression='gzip')
 
-        AB_df = pd.concat(AB_dfs)
-        AB_df = AB_df.sort_values([AB_df.columns[0], AB_df.columns[1]])
-
-    # ############ DEBUG #####################################################################
-    # remove the pon_list and all bam files (by removing the whole pon folder)
-    if not config['debug_mode'] and threads > 1:
-        subprocess.check_call(['rm', '-r', pon_folder])
-        subprocess.check_call(['rm', '-r', config['pileup_folder']])
     #########################################################################################
 
     return f"{dt.now().strftime('%H:%M:%S')}: Generation of AB file finished."
@@ -299,7 +297,7 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     cols = ['Chr', 'Start', 'Alt']
     # load the file and set Chr and Start to index for proper setting of multi-index
     print(f"Loading cache {cache_file}..")
-    AB_df = pd.read_csv(cache_file, sep=',').set_index(cols[:2])
+    AB_df = pd.read_csv(cache_file, sep=',', compression='gzip').set_index(cols[:2])
     AB_columns = pd.MultiIndex.from_product([acgt, ['+', '-'], ['a', 'b']], names=['var', 'strand', 'param'])
     # set multi-indexed columns
     AB_df.columns = AB_columns
