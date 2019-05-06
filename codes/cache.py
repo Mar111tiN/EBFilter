@@ -54,16 +54,12 @@ def pon2pileup(pon_dict, config, chromosome):
     # subprocess.check_call(mpileup_cmd)
     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
-# ##################### THE BETTER (but not working) WAY #######################
-    # # use StringIO for small files (not implemented)
-    # else:
-    #     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
-    #     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
 ###############################################################################
 
     names = ['Chr', 'Start', 'Ref']
     for i in range(pon_count):
         names += [f"depth{i}", f"read{i}", f"Q{i}"]
+    # read StringIO object from stream into pileup_df in memory
     pileup_df = pd.read_csv(pileup_file, sep='\t', header=None, names=names)
     pileup_len = len(pileup_df.index)
     if pileup_len == 0:
@@ -86,6 +82,13 @@ def pon2pileup(pon_dict, config, chromosome):
     print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
+    ###########################
+    # Here, I could try to already pass the df_chunk generator to then be used directly by the AB-pool 
+    # this should circumvent the data limit of the subprocess pool:
+        # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
+        # pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=1000)
+
+    ##########################
     return {'file': pileup_file, 'chr': chromosome, 'pileup_len': pileup_len}
 
 
@@ -152,7 +155,7 @@ def generate_cache(pon_dict, config):
     create a cache file for ab-parameters
     '''
 
-    # ######################## PON2PILEUP ###################################
+    # #####################INIT + VALIDATION #########################
     # get the list of desired chroms without existing cache file from config['chr']
     config['chr'] = utils.check_cache_files(config)
     if len(config['chr']):
@@ -164,12 +167,12 @@ def generate_cache(pon_dict, config):
     else:
         return "Everything is there. No need for computation."
 
-    # ###################### !!!!!!!!!!!!!!!!!!!!! ###########################
-    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
     threads = config['threads']
 
+    # ######################## PON2PILEUP ###################################
     config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
     config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
+    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
     # pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
 
@@ -191,7 +194,6 @@ def generate_cache(pon_dict, config):
         success_messages = []
         # OR send in the path to the dict and transfer df within pon2pileup to global storage list (does not work so far)
         pileup_file_dicts += pileup_pool.map(partial(pon2pileup, pon_dict, config), pileup_chrs)
-        print(pileup_file_dicts)
         pileup_pool.close()
         pileup_pool.join()
 
@@ -199,7 +201,7 @@ def generate_cache(pon_dict, config):
     pileup_dicts = []
     for pileup_file_dict in pileup_file_dicts:
         # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
-        pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=1000)
+        pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=10000)
         print(f"{dt.now().strftime('%H:%M:%S')}: Reading pileup {pileup_file_dict['file']} for AB computation")
         pileup_dict = {'df': pileup_dfgen, 'chr': pileup_file_dict['chr'], 'pileup_len': pileup_file_dict['pileup_len']}
         pileup_dicts.append(pileup_dict)
