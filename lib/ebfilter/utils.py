@@ -140,6 +140,13 @@ def validate_pon(pon_list, config):
     return {'list': pon_list, 'df': pon_df}
 
 
+def delete_pom_bams(bam_file):
+    '''
+    delete a bam and its accompanying bai file
+    '''
+    subprocess.check_call(['rm', bam_file, f"{bam_file}.bai"])
+
+
 def validate_bed(bed_file, config):
     '''
     check for existence of bed_file and if chroms are compatible with PONs

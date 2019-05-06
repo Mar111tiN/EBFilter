@@ -44,6 +44,7 @@ def main(args, config):
         sys.exit(1)
     # else config['chr'] is the one selected chromosome
 
+    # ###########################################################
     # #################### --> GENERATE CACHE ###################
     if config['generate_cache']:
 
@@ -82,7 +83,7 @@ def main(args, config):
         success = generate_cache(pon_dict, config)
         print(success)
         return
-
+    # ###########################################################
     # #################### EBscore ###################
     # implicit else:
     cache_folder = args['use_cache'] if 'use_cache' in args.keys() else None
