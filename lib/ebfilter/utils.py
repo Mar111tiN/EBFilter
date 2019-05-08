@@ -15,6 +15,7 @@ sign_re = re.compile(r'\^.|\$')
 indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
 
+
 # ############ PON2SPLITBAM ############################################
 def split_bam(chrom, pon_folder, pon_row):
     '''
@@ -71,7 +72,7 @@ def bam2chr_list(bam_file):
     bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
     stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
     non_empty = stats_df[stats_df[2] > 100]
-    return list(non_empty[0].T)
+    return [str(chrom) for chrom in list(non_empty[0].T)]
 
 
 def pon2chr_list(pon_df):
@@ -81,7 +82,7 @@ def pon2chr_list(pon_df):
 
     chr_set = set()
     pon_df[0].apply(lambda bam_file: chr_set.update(bam2chr_list(bam_file)))
-    return list(chr_set)
+    return [str(chrom) for chrom in list(chr_set)]
 
 
 def bed2chr_list(bed_file):
@@ -91,7 +92,7 @@ def bed2chr_list(bed_file):
 
     bed_df = pd.read_csv(bed_file, sep='\t', dtype={0: str}, header=None, skiprows=10)
     # return the list of unique values from the first row (Chr row)
-    return bed_df.iloc[:, 0].unique()
+    return [str(chrom) for chrom in bed_df.iloc[:, 0].unique()]
 
 
 def anno2chr_list(anno_file):
@@ -101,7 +102,7 @@ def anno2chr_list(anno_file):
 
     anno_df = pd.read_csv(anno_file, sep='\t', dtype={0: str}, header=None)
     # return the list of unique values from the first row (Chr row)
-    return anno_df.iloc[:, 0].unique()
+    return [str(chrom) for chrom in anno_df.iloc[:, 0].unique()]
 
 
 def validate(file, message):
@@ -245,26 +246,27 @@ def read_anno_csv(mut_file, config):
             sys.stderr.write(f"Only one column detected in {mut_file} - I am guessing wrong separator ( {config['sep']} )?")
             sys.exit(1)
 
-    with open(mut_file, 'r') as input_file:
-        has_header = csv.Sniffer().has_header(input_file.read(1024))
+    with open(mut_file, 'r') as f:
+        has_header = csv.Sniffer().has_header(f.readline())
 
     sep = config['sep']
 
     if has_header:
         print(f'Header detected')
-        anno_df = pd.read_csv(mut_file, sep=sep, converters={0:to_int, 1:to_int, 2:to_int})
+        anno_df = pd.read_csv(mut_file, sep=sep, low_memory=False, converters={0: to_int, 1: to_int, 2: to_int})
         org_columns = anno_df.columns
         check_columns(mut_file, anno_df, config)
         anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + list(anno_df.columns[5:])
+
     else:
-        anno_df = pd.read_csv(mut_file, sep=sep, header=None, converters={0: to_int, 1: to_int, 2: to_int})
+        anno_df = pd.read_csv(mut_file, sep=sep, header=None, low_memory=False, converters={0: to_int, 1: to_int, 2: to_int})
         check_columns(mut_file, anno_df, config)
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
         anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + rest_columns
     # retrieve chrom list occurring in anno_file
-    anno_chr = anno_df.iloc[:, 0].unique()
-
+    anno_chr = [str(chrom) for chrom in anno_df.iloc[:, 0].unique()]
+    print('Anno:', anno_chr, 'Pon:', config['pon_chr'])
     if set(anno_chr).issubset(set(config['pon_chr'])):
         # active chroms are only the ones found in the anno file and in config['chr']
         config['chr'] = list(set(anno_chr) & set(config['chr']))

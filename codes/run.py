@@ -96,7 +96,6 @@ def main(args, config):
 
     # get arguments for EBscore
     mut_file = utils.validate(args['mut_file'], "No target mutation file")
-    print('SEP:', config['sep'])
     if not config['sep'] in [',', '\t']:
         print(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..')
 
@@ -107,7 +106,7 @@ def main(args, config):
 
     # #################### EBscore ANNO ###################
     if is_anno:
-        print(f'Loading annotation file {mut_file}..')
+        print(f'Loading annotation file {mut_file}')
         # create anno_df, store original other info and get anno_chr list
         anno_df, original_columns, config['anno_chr'] = utils.read_anno_csv(mut_file, config)
         # create small copy for working with
