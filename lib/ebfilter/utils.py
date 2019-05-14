@@ -253,20 +253,19 @@ def read_anno_csv(mut_file, config):
 
     if has_header:
         print(f'Header detected')
-        anno_df = pd.read_csv(mut_file, sep=sep, low_memory=False, converters={0: to_int, 1: to_int, 2: to_int})
+        anno_df = pd.read_csv(mut_file, sep=sep, dtype={'Chr':str}, converters={1: to_int, 2: to_int})
         org_columns = anno_df.columns
         check_columns(mut_file, anno_df, config)
         anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + list(anno_df.columns[5:])
 
     else:
-        anno_df = pd.read_csv(mut_file, sep=sep, header=None, low_memory=False, converters={0: to_int, 1: to_int, 2: to_int})
+        anno_df = pd.read_csv(mut_file, sep=sep, header=None, dtype={'Chr':str}, converters={1: to_int, 2: to_int})
         check_columns(mut_file, anno_df, config)
         org_columns = None
         rest_columns = [f'other{i+1}' for i in range(len(anno_df.columns) - 5)]
         anno_df.columns = ['Chr', 'Start', 'End', 'Ref', 'Alt'] + rest_columns
     # retrieve chrom list occurring in anno_file
     anno_chr = [str(chrom) for chrom in anno_df.iloc[:, 0].unique()]
-    print('Anno:', anno_chr, 'Pon:', config['pon_chr'])
     if set(anno_chr).issubset(set(config['pon_chr'])):
         # active chroms are only the ones found in the anno file and in config['chr']
         config['chr'] = list(set(anno_chr) & set(config['chr']))
@@ -279,7 +278,7 @@ def read_anno_csv(mut_file, config):
     return (anno_df.sort_values(['Chr', 'Start']), org_columns, anno_chr)
 
 
-def make_region_list(mut_df, out_path, threads):
+def make_region_list(mut_df, config):
     '''
     make bed file for mpileup from mut_df
     # better to open the original file as pandas in this function
@@ -289,8 +288,8 @@ def make_region_list(mut_df, out_path, threads):
     region_pd.iloc[:, 1] = mut_df.iloc[:, 1] - 1 - (mut_df.iloc[:, 4] == '-')
     region_pd.iloc[:, 2] = mut_df.iloc[:, 1] - (mut_df.iloc[:, 4] == '-')
     # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
-    outpath = os.path.splitext(out_path)[0]
-    if threads > 1:     # if thread not -1
+    outpath = os.path.splitext(config['output_path'])[0]
+    if config['threads'] > 1:     # if thread not -1
         outpath += f"_{os.getpid()}"
     outpath += ".region_list.bed"
     region_pd.iloc[:, :3].to_csv(outpath, sep='\t', header=None, index=False)
@@ -404,3 +403,28 @@ def cleanup_badQ(mut_df, pon_count, filters):
         mut_df[is_snp & has_badQ] = bad_df.apply(partial(remove_badQ, i), axis=1)
 
     return mut_df
+
+
+def get_AB_df(chrom, config):
+    '''
+    load and reformat the AB-cache file for a chromosome
+    '''
+
+    cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
+    # the merger columns
+    cols = ['Chr', 'Start', 'Alt']
+    # load the file and set Chr and Start to index for proper setting of multi-index
+    # print(f"Loading cache {cache_file}..")
+    AB_df = pd.read_csv(cache_file, sep=',', compression='gzip', dtype={'Chr': str, 'Start': int}).set_index(cols[:2])
+    AB_columns = pd.MultiIndex.from_product([['A', 'C', 'T', 'G'], ['+', '-'], ['a', 'b']], names=['var', 'strand', 'param'])
+    # set multi-indexed columns
+    AB_df.columns = AB_columns
+    # stack the var column level for merge with the snp_df
+    AB_df = AB_df.stack('var')
+    # reduce the column index level to 1
+    AB_df.columns = AB_df.columns.droplevel(0)
+    # unset the indices and transfer to columns
+    AB_df = AB_df.reset_index()
+    # rename columns for merge
+    AB_df.columns = cols + ['a+', 'b+', 'a-', 'b-']
+    return AB_df
