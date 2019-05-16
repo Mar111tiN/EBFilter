@@ -144,6 +144,7 @@ def validate_bed(bed_file, config):
 # ####################### I/O ####################################
 ##################################################################
 
+
 def read_anno_csv(mut_file, config):
     '''
     reads in the mutation file and resets the relevant header columns required for dataframe operations

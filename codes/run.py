@@ -14,7 +14,6 @@ from . import anno
 from . import vcf
 from .cache import generate_cache
 from .ebscore import get_EB_from_cache
-from datetime import datetime as dt
 
 
 def main(args, config):

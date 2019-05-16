@@ -42,9 +42,11 @@ def anno2pileup(mut_df, bam, pon_dict, region, config):
     '''
 
     # make region list for use in l_option of mpileup (sets position offset)
+
     bed_file = utils.make_region_list(mut_df, config)  # in utils --> out_1.region_list.bed
     # determine wether it is bam or pon
     mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q",str(config['Q']), "--ff",config['ff'], "-l", bed_file]
+
     if region:
         mpileup_cmd = mpileup_cmd + ["-r", region]
 
@@ -55,8 +57,7 @@ def anno2pileup(mut_df, bam, pon_dict, region, config):
     #   - create the respective mpileup_command
     #   - execute subprocess with Popen and store stream into pileup_df
     #   - merge to mut_df (everything in one big dataframe)
-    #   -
-    #
+
     # in cache_mode, only pileup the target
     pileup_for = ['target']
     if not config['cache_mode']:
@@ -75,9 +76,11 @@ def anno2pileup(mut_df, bam, pon_dict, region, config):
         # the columns needed in the dataframe
         names = ['Chr', 'Start', 'Ref']
         # target pileup
+
         if 'target' in out:
             names += ['depth0', 'read0', 'Q0']
             pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names=names, dtype={'Chr':str}).drop(columns='Ref')
+
         # control pileup
         else:
             # create the columns for the control pileup data: depth0 read0 Q0 depth1 read1 Q1 depth2 ....
