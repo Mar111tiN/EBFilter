@@ -69,11 +69,7 @@ def anno2pileup(mut_df, bam, pon_dict, region, config):
             pon_count = len(pon_dict['df'].index)
             mpileup_cmd += ["-b", pon_dict['list']]   # pileup from pon_list
 
-        # ################### DEBUG ######################
-        if config['debug_mode']:
-            print(' '.join(mpileup_cmd))
-        #################################################
-
+        utils.show_command(mpileup_cmd, config)
         pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
         pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
         # the columns needed in the dataframe
