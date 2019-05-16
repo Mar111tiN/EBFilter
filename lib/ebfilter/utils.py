@@ -16,7 +16,9 @@ indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
 
 
-# ############ PON2SPLITBAM ############################################
+# ############ MISC ############################################
+################################################################
+
 def split_bam(chrom, pon_folder, pon_row):
     '''
     creates a sub bam file (+bai) of the specified chromosomal region per pon_list row
@@ -33,16 +35,11 @@ def split_bam(chrom, pon_folder, pon_row):
     return bam_out
 
 
-def validate_region(region):
+def delete_pom_bams(bam_file):
     '''
-    returns True if region 
+    delete a bam and its accompanying bai file
     '''
-
-    # region format check
-    if region:
-        region_match = region_exp.match(region)
-        if region_match:
-            return True
+    subprocess.check_call(['rm', bam_file, f"{bam_file}.bai"])
 
 
 def sort_chr(dict):
@@ -62,47 +59,37 @@ def sort_chr(dict):
     return chr
 
 
-def bam2chr_list(bam_file):
+def make_region_list(mut_df, config):
     '''
-    creates a list of chrom names for the input bam
-    '''
-
-    bam_stats_cmd = ['samtools', 'idxstats', bam_file]
-    bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
-    bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
-    stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
-    non_empty = stats_df[stats_df[2] > 100]
-    return [str(chrom) for chrom in list(non_empty[0].T)]
-
-
-def pon2chr_list(pon_df):
-    '''
-    generate a chrom list from the pon_list
+    make bed file for mpileup from mut_df
+    # better to open the original file as pandas in this function
     '''
 
-    chr_set = set()
-    pon_df[0].apply(lambda bam_file: chr_set.update(bam2chr_list(bam_file)))
-    return [str(chrom) for chrom in list(chr_set)]
+    region_pd = mut_df.iloc[:, :5].copy()
+    region_pd.iloc[:, 1] = mut_df.iloc[:, 1] - 1 - (mut_df.iloc[:, 4] == '-')
+    region_pd.iloc[:, 2] = mut_df.iloc[:, 1] - (mut_df.iloc[:, 4] == '-')
+    # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
+    outpath = os.path.splitext(config['output_path'])[0]
+    if config['threads'] > 1:     # if thread not -1
+        outpath += f"_{os.getpid()}"
+    outpath += ".region_list.bed"
+    region_pd.iloc[:, :3].to_csv(outpath, sep='\t', header=None, index=False)
+    return outpath
+
+# ###################### VALIDATIONS ###############################
+####################################################################
 
 
-def bed2chr_list(bed_file):
+def validate_region(region):
     '''
-    generates a chrom list from a annotated mutation file
+    returns True if region 
     '''
 
-    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0: str}, header=None, skiprows=10)
-    # return the list of unique values from the first row (Chr row)
-    return [str(chrom) for chrom in bed_df.iloc[:, 0].unique()]
-
-
-def anno2chr_list(anno_file):
-    '''
-    generates a chrom list from a annotated mutation file
-    '''
-
-    anno_df = pd.read_csv(anno_file, sep='\t', dtype={0: str}, header=None)
-    # return the list of unique values from the first row (Chr row)
-    return [str(chrom) for chrom in anno_df.iloc[:, 0].unique()]
+    # region format check
+    if region:
+        region_match = region_exp.match(region)
+        if region_match:
+            return True
 
 
 def validate(file, message):
@@ -141,13 +128,6 @@ def validate_pon(pon_list, config):
     return {'list': pon_list, 'df': pon_df}
 
 
-def delete_pom_bams(bam_file):
-    '''
-    delete a bam and its accompanying bai file
-    '''
-    subprocess.check_call(['rm', bam_file, f"{bam_file}.bai"])
-
-
 def validate_bed(bed_file, config):
     '''
     check for existence of bed_file and if chroms are compatible with PONs
@@ -161,64 +141,8 @@ def validate_bed(bed_file, config):
     return (bed_file, bed_chr)
 
 
-def validate_cache(cache_folder, config):
-    '''
-    file existence check for cache folder and the containing cache files
-    returns the validated cache_folder
-    '''
-
-    # check existence of cache folder
-    if not os.path.isdir(cache_folder):
-        sys.stderr.write(f"Cache folder {cache_folder} cannot be found! Exiting..")
-        sys.exit(1)
-
-    # check existence of cache files for the chroms in the pon folder and store in cache_chr
-    cache_file_tuples = [(os.path.join(cache_folder, f"{chrom}.cache"), chrom) for chrom in config['pon_chr']]
-    cache_chr = []
-    # store existing cache_files in cache_chr
-    for cache_file_tuple in cache_file_tuples:
-        if os.path.isfile(cache_file_tuple[0]):
-            cache_chr.append(cache_file_tuple[1])
-    if len(cache_chr) == 0:
-        sys.stderr.write(f"Cache folder {cache_folder} contains no usable cache files! Exiting..")
-        sys.exit(1)
-    return (cache_folder, cache_chr)
-
-
-def check_cache_files(config):
-    '''
-    checks all active chromosoms for a preexisting cache file and only returns the list of missing cache files
-    '''
-
-    not_cached = []
-    for chrom in config['chr']:
-        cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
-        if os.path.isfile(cache_file):
-            print(f"Cache file {cache_file} found. Does not need to be generated.")
-        else:
-            not_cached.append(chrom)
-    return not_cached
-
-
-def check_pileup_files(config):
-    '''
-    checks, whether pileup files already exist and returns the chrom list for non_existing pileups
-    returns list of missing pileup files and list of pileup_dicts for existing pileups
-    '''
-
-    not_piled_up = []
-    already_piledup_dicts = []
-    for chrom in config['chr']:
-        pileup_file = os.path.join(config['pileup_folder'], f"cache_{chrom}.pileup")
-        if os.path.isfile(pileup_file):
-            pile_len = len(pd.read_csv(pileup_file, sep='\t').index)
-            print(f"Pileup file {pileup_file} found. Does not need to be built again.")
-            already_piledup_dicts.append({'file': pileup_file, 'chr': chrom, 'pileup_len': pile_len})
-        else:
-            not_piled_up.append(chrom)
-
-    return not_piled_up, already_piledup_dicts
-
+# ####################### I/O ####################################
+##################################################################
 
 def read_anno_csv(mut_file, config):
     '''
@@ -278,22 +202,113 @@ def read_anno_csv(mut_file, config):
     return (anno_df.sort_values(['Chr', 'Start']), org_columns, anno_chr)
 
 
-def make_region_list(mut_df, config):
+# ################### CHROMOSOME EXTRACTIONS ######################
+###################################################################
+
+def bam2chr_list(bam_file):
     '''
-    make bed file for mpileup from mut_df
-    # better to open the original file as pandas in this function
+    creates a list of chrom names for the input bam
     '''
 
-    region_pd = mut_df.iloc[:, :5].copy()
-    region_pd.iloc[:, 1] = mut_df.iloc[:, 1] - 1 - (mut_df.iloc[:, 4] == '-')
-    region_pd.iloc[:, 2] = mut_df.iloc[:, 1] - (mut_df.iloc[:, 4] == '-')
-    # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
-    outpath = os.path.splitext(config['output_path'])[0]
-    if config['threads'] > 1:     # if thread not -1
-        outpath += f"_{os.getpid()}"
-    outpath += ".region_list.bed"
-    region_pd.iloc[:, :3].to_csv(outpath, sep='\t', header=None, index=False)
-    return outpath
+    bam_stats_cmd = ['samtools', 'idxstats', bam_file]
+    bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
+    bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
+    stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
+    non_empty = stats_df[stats_df[2] > 100]
+    return [str(chrom) for chrom in list(non_empty[0].T)]
+
+
+def pon2chr_list(pon_df):
+    '''
+    generate a chrom list from the pon_list
+    '''
+
+    chr_set = set()
+    pon_df[0].apply(lambda bam_file: chr_set.update(bam2chr_list(bam_file)))
+    return [str(chrom) for chrom in list(chr_set)]
+
+
+def bed2chr_list(bed_file):
+    '''
+    generates a chrom list from a annotated mutation file
+    '''
+
+    bed_df = pd.read_csv(bed_file, sep='\t', dtype={0: str}, header=None, skiprows=10)
+    # return the list of unique values from the first row (Chr row)
+    return [str(chrom) for chrom in bed_df.iloc[:, 0].unique()]
+
+
+def anno2chr_list(anno_file):
+    '''
+    generates a chrom list from a annotated mutation file
+    '''
+
+    anno_df = pd.read_csv(anno_file, sep='\t', dtype={0: str}, header=None)
+    # return the list of unique values from the first row (Chr row)
+    return [str(chrom) for chrom in anno_df.iloc[:, 0].unique()]
+
+
+# ################# CACHING ####################################
+################################################################
+
+
+def validate_cache(cache_folder, config):
+    '''
+    file existence check for cache folder and the containing cache files
+    returns the validated cache_folder
+    '''
+
+    # check existence of cache folder
+    if not os.path.isdir(cache_folder):
+        sys.stderr.write(f"Cache folder {cache_folder} cannot be found! Exiting..")
+        sys.exit(1)
+
+    # check existence of cache files for the chroms in the pon folder and store in cache_chr
+    cache_file_tuples = [(os.path.join(cache_folder, f"{chrom}.cache"), chrom) for chrom in config['pon_chr']]
+    cache_chr = []
+    # store existing cache_files in cache_chr
+    for cache_file_tuple in cache_file_tuples:
+        if os.path.isfile(cache_file_tuple[0]):
+            cache_chr.append(cache_file_tuple[1])
+    if len(cache_chr) == 0:
+        sys.stderr.write(f"Cache folder {cache_folder} contains no usable cache files! Exiting..")
+        sys.exit(1)
+    return (cache_folder, cache_chr)
+
+
+def check_cache_files(config):
+    '''
+    checks all active chromosoms for a preexisting cache file and only returns the list of missing cache files
+    '''
+
+    not_cached = []
+    for chrom in config['chr']:
+        cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
+        if os.path.isfile(cache_file):
+            print(f"Cache file {cache_file} found. Does not need to be generated.")
+        else:
+            not_cached.append(chrom)
+    return not_cached
+
+
+def check_pileup_files(config):
+    '''
+    checks, whether pileup files already exist and returns the chrom list for non_existing pileups
+    returns list of missing pileup files and list of pileup_dicts for existing pileups
+    '''
+
+    not_piled_up = []
+    already_piledup_dicts = []
+    for chrom in config['chr']:
+        pileup_file = os.path.join(config['pileup_folder'], f"cache_{chrom}.pileup")
+        if os.path.isfile(pileup_file):
+            pile_len = len(pd.read_csv(pileup_file, sep='\t').index)
+            print(f"Pileup file {pileup_file} found. Does not need to be built again.")
+            already_piledup_dicts.append({'file': pileup_file, 'chr': chrom, 'pileup_len': pile_len})
+        else:
+            not_piled_up.append(chrom)
+
+    return not_piled_up, already_piledup_dicts
 
 
 def clean_read_column(read_series):
@@ -428,3 +443,16 @@ def get_AB_df(chrom, config):
     # rename columns for merge
     AB_df.columns = cols + ['a+', 'b+', 'a-', 'b-']
     return AB_df
+
+
+# ################# PROCESSING ##################################
+################################################################
+
+def show_command(command_list, config):
+    '''
+    prints the command line if debugging is active
+    '''
+
+    if config['debug_mode']:
+        print('\033[1m', '$ ' + ' '.join(command_list), '\033[0m')
+    return

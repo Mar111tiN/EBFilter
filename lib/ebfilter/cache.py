@@ -51,11 +51,8 @@ def pon2pileup(pon_dict, config, chromosome):
     # pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
     # mpileup_cmd += ['-o', pileup_file]
     print(f"{dt.now().strftime('%H:%M:%S')} Generating pileup for chromosome {chromosome}..")
-    # subprocess.check_call(mpileup_cmd)
-    # ################### DEBUG ######################
-    if config['debug_mode']:
-        print('\033[1m', ' '.join(mpileup_cmd), '\033[0m')
-    #################################################
+
+    utils.show_command(mpileup_cmd, config)
     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
     # !!!!!!!!!! MEMORY ERROR FOR LARGE FILES !!!!!!!!!!!!!!!!!!!!! --> provide more memory or write to file
     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
@@ -87,7 +84,6 @@ def pon2pileup(pon_dict, config, chromosome):
     print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
-
     ##########################################################################
     # ############################ DEBUG ######################################
     if not config['debug_mode']:
@@ -95,8 +91,8 @@ def pon2pileup(pon_dict, config, chromosome):
         subprocess.check_call(['rm', pon_sub_list])
         pon_sub_df['bam'].apply(utils.delete_pom_bams)
     ##########################################################################
-
-    return {'file': pileup_file, 'chr': chromosome, 'pileup_len': pileup_len}
+    pileup_file_dict = {'file': pileup_file, 'chr': chromosome, 'pileup_len': pileup_len}
+    return pileup_file_dict
 
 
 def pileup2AB(config, chromosome, chr_len, pileup_df):
@@ -178,8 +174,8 @@ def generate_cache(pon_dict, config):
     # ######################## PON2PILEUP ###################################
     config['pileup_folder'] = pileup_folder = os.path.join(config['cache_folder'], 'cache_pileups')
     config['pon_folder'] = pon_folder = os.path.join(config['cache_folder'], 'pon')
-    # get the list of chroms without existing pileup_files from config['chr'] and store the existing
-    # pileups in pileup_file_dicts
+    # get the list of chroms without existing pileup_files from config['chr'] 
+    # ...and store the existing pileups in pileup_file_dicts
     pileup_chrs, pileup_file_dicts = utils.check_pileup_files(config)
 
     # if still some pileups remain
@@ -193,7 +189,7 @@ def generate_cache(pon_dict, config):
         # in order to use the threads, no multiprocessing is used here
         # otherwise, memory peaks would kill the process
         for pileup_chr in pileup_chrs:
-            pileup_file_dicts += pon2pileup(pon_dict, config, pileup_chr)
+            pileup_file_dicts.append(pon2pileup(pon_dict, config, pileup_chr))
 
     # reading the pileup files into df generators
     pileup_dicts = []
