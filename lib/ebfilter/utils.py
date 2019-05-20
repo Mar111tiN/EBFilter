@@ -7,6 +7,7 @@ from functools import partial
 import subprocess
 from subprocess import Popen, PIPE, DEVNULL
 from io import StringIO
+from datetime import datetime as dt
 
 # ################# GLOBALS #############################################
 # regexps for start/end sign
@@ -14,10 +15,26 @@ sign_re = re.compile(r'\^.|\$')
 # regexps for indels with a group for getting indel length
 indel_simple = re.compile(r'[\+\-]([0-9]+)')
 region_simple = re.compile(r"^[^ \t\n\r\f\v,]+:\d+\-\d+")
+ansii_colors = {
+          'magenta': '[1;35;2m',
+          'green': '[1;9;2m',
+          'red': '[1;31;1m',
+          'cyan': '[1;36;1m',
+          'gray': '[1;30;1m',
+          'black': '[0m'
+          }
 
+colors = {
+        'process': ansii_colors['green'],
+        'time': ansii_colors['magenta'],
+        'normal': ansii_colors['gray'],
+        'warning': ansii_colors['red'],
+        'success': ansii_colors['cyan']
+        }
 
 # ############ MISC ############################################
 ################################################################
+
 
 def split_bam(chrom, pon_folder, pon_row):
     '''
@@ -59,7 +76,7 @@ def sort_chr(dict):
     return chr
 
 
-def make_region_list(mut_df, config):
+def make_region_list(mut_df, chrom, config):
     '''
     make bed file for mpileup from mut_df
     # better to open the original file as pandas in this function
@@ -70,8 +87,7 @@ def make_region_list(mut_df, config):
     region_pd.iloc[:, 2] = mut_df.iloc[:, 1] - (mut_df.iloc[:, 4] == '-')
     # outpath: AML033-D.csv --> AML033-D_0.region_list.bed
     outpath = os.path.splitext(config['output_path'])[0]
-    if config['threads'] > 1:     # if thread not -1
-        outpath += f"_{os.getpid()}"
+    outpath += f"_{chrom}" if chrom else f"_{os.getpid()}"
     outpath += ".region_list.bed"
     region_pd.iloc[:, :3].to_csv(outpath, sep='\t', header=None, index=False)
     return outpath
@@ -121,7 +137,7 @@ def validate_pon(pon_list, config):
     returns a tuple of a dict containing the pon_list and the pon_df and the chr_list of containing chroms
     '''
 
-    print(f"Validating PoN list {pon_list}..")
+    show_output(f"Validating PoN list {pon_list}..")
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
     pon_df[0].apply(validate_bam)
     config['pon_chr'] = pon2chr_list(pon_df)
@@ -143,6 +159,120 @@ def validate_bed(bed_file, config):
 
 # ####################### I/O ####################################
 ##################################################################
+
+def get_config(args):
+    '''
+    gets the config file from the config file
+    '''
+
+    config = {'threads': args['t']}
+    config['debug_mode'] = args['debug']
+    config['sep'] = ',' if args['sep'] == 'comma' else '\t'
+    config['ff'] = args['ff']
+    config['q'] = args['q']
+    config['Q'] = args['Q']
+    config['ff'] = args['ff']
+    config['fitting_penalty'] = args['fit_with']
+    config['cache_mode'] = False
+
+    filter_quals = ''
+    for qual in range(33, 33 + config['Q']):
+        filter_quals += chr(qual)
+    config['filter_quals'] = filter_quals
+
+    return config
+
+
+def get_makeEB_config(args, config):
+    '''
+    set the makeEB specific config from args and set pon_dict
+    '''
+    # ##### set chromosome ###########################
+    # set config['chr'] to chromosome if provided in makeEBcache
+    config['chr'] = [args['chrom']]
+
+    # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
+    pon_dict = validate_pon(args['pon_list'], config)
+
+    # ##### set cache folder #########################
+    if 'cache_folder' in args.keys():
+        config['cache_folder'] = cache_folder = args['cache_folder']
+    else:
+        # if no cache folder is provided, pon_list folder is used
+        config['cache_folder'] = os.path.join(os.path.dirname(pon_dict['list']), f"EBcache_{os.path.splitext(pon_dict['list'][0])}")
+
+    if not os.path.isdir(cache_folder):
+        os.mkdir(cache_folder)
+
+    # ##### set bed file #############################
+    # validate bed file and get the chromosomes needed for caching
+    bed_file = args['bed_file'] if 'bed_file' in args.keys() else None
+    if bed_file:
+        config['bed_file'], config['bed_chr'] = validate_bed(bed_file, config)
+        valid_chrs = list(set(config['bed_chr']) & set(config['chr']))
+        if len(valid_chrs):
+            # load the valid chroms in the bed file into the active chroms
+            config['chr'] = valid_chrs
+        # if restricted chrom is not in bed file
+        else:
+            print(f'Chromosome {config["chr"]} is not in bed file. Nothing to do here.')
+            return
+    else:   # no bed_file
+        # write empty
+        if args['force_caching']:
+            config['bed_file'], config['bed_chr'] = None, []
+        else:
+            sys.stderr.write('''
+                Please provide a bed_file or use -force caching option!\n
+                Generating a cache file for the entire genomic stretch covered by the PoN potentially takes forever!!
+                ''')
+            sys.exit(1)
+
+    return config, pon_dict
+
+
+def get_EBscore_args(args, config):
+    '''
+    set the EBscore specific config from args and set pon_dict
+    '''
+
+    mut_file = validate(args['mut_file'], "No target mutation file")
+    #  check, whether mut_file is anno format
+    is_anno = not(os.path.splitext(mut_file)[-1] == '.vcf')
+
+    # check if tumor_bam and bai exists and whether it has the same chrom set as pon_file
+    tumor_bam = validate_bam(args['tumor_bam'])
+
+    if not config['sep'] in [',', '\t']:
+        show_output(f'Separator \" {config["sep"]} \" cannot be used. Trying to open mutation file with separator \" \\t \"..', color='warning')
+
+    # store list and pon_df in pon_dict, store pon chroms in config['pon_chr']
+    pon_dict = validate_pon(args['pon_list'], config)
+    config['chr'] = config['pon_chr']
+
+    # set config['chr'] to region if provided in EBscore
+    region = args['region']
+    if region:
+        config['chr'] == region.split(':')[0]
+    if not set(config['chr']).issubset(set(config['pon_chr'])):
+        sys.stderr.write('''
+        Provided chromosome name is not found in bam files! Exiting..
+        ''')
+        sys.exit(1)
+
+    cache_folder = args['use_cache']
+    if cache_folder:
+        # validate cache returns the cache_folder (same as input) and the chrom list of the..
+        # ..existing cache files --> stored in config
+        config['cache_folder'], config['cache_chr'] = validate_cache(cache_folder, config)
+        config['cache_mode'] = True
+        show_output('Running EBscore in EBcache mode...')
+    else:
+        config['cache_mode'] = False
+
+    config['output_path'] = args['output_path']
+
+    return config, pon_dict, mut_file, is_anno, tumor_bam, region
 
 
 def read_anno_csv(mut_file, config):
@@ -177,7 +307,7 @@ def read_anno_csv(mut_file, config):
     sep = config['sep']
 
     if has_header:
-        print(f'Header detected')
+        show_output(f'Header detected')
         anno_df = pd.read_csv(mut_file, sep=sep, dtype={'Chr':str}, converters={1: to_int, 2: to_int})
         org_columns = anno_df.columns
         check_columns(mut_file, anno_df, config)
@@ -286,7 +416,7 @@ def check_cache_files(config):
     for chrom in config['chr']:
         cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
         if os.path.isfile(cache_file):
-            print(f"Cache file {cache_file} found. Does not need to be generated.")
+            show_output(f"Cache file {cache_file} found. Does not need to be generated.", color='success')
         else:
             not_cached.append(chrom)
     return not_cached
@@ -304,7 +434,7 @@ def check_pileup_files(config):
         pileup_file = os.path.join(config['pileup_folder'], f"cache_{chrom}.pileup")
         if os.path.isfile(pileup_file):
             pile_len = len(pd.read_csv(pileup_file, sep='\t').index)
-            print(f"Pileup file {pileup_file} found. Does not need to be built again.")
+            show_output(f"Pileup file {pileup_file} found. Does not need to be built again.", color='success')
             already_piledup_dicts.append({'file': pileup_file, 'chr': chrom, 'pileup_len': pile_len})
         else:
             not_piled_up.append(chrom)
@@ -339,6 +469,10 @@ def cleanup_df(mut_df, pon_count, config):
         indels on pos strand are turned into '-'
         indels on neg strand are turned into '_'
         '''
+
+        if length == 0:
+            return read
+
         # construct the regexp string using the indel length
         pos_indel_re = re.compile(r"([ACGTN])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(length) + "})")
         neg_indel_re = re.compile(r"([acgtn])([\+\-])([0-9]+)([ACGTNacgtn]{" + str(length) + "})")
@@ -353,8 +487,9 @@ def cleanup_df(mut_df, pon_count, config):
         if m:
             indel_length = m.group(1)
         else:
-            sys.stderr.write(f"No indel detected in read pileup at position {row['Start']}.\t Please check validity of annotation file!")
-            sys.exit(1)
+            indel_length = 0
+            show_output(f"Warning! No indel detected in read pileup at position {row['Chr']}:{row['Start']}.\t Please check validity of annotation file!", color='warning')
+            # print('\033[93m' + f"Warning! No indel detected in read pileup at position {row['Chr']}:{row['Start']}.\t Please check validity of annotation file!" + '\033[0m')
         # in every column, remove the indel traces
         for i in range(i+1):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], indel_length)
@@ -449,11 +584,23 @@ def get_AB_df(chrom, config):
 # ################# PROCESSING ##################################
 ################################################################
 
-def show_command(command_list, config):
+def show_command(command_list, config, multi=True):
     '''
     prints the command line if debugging is active
     '''
 
     if config['debug_mode']:
-        print('\033[1m', '$ ' + ' '.join(command_list), '\033[0m')
+        proc = f"\033[92mProcess {os.getpid()}\033[0m : \033[0m" if multi else ''
+        cmd = f"\033[1m$ {' '.join(command_list)}\033[0m"
+        print(proc + cmd)
     return
+
+
+def show_output(text, color='normal', multi=False, time=False):
+    '''
+    get colored output to the terminal
+    '''
+    time = f"\033{colors['time']}{dt.now().strftime('%H:%M:%S')}\033[0m : " if time else ''
+    proc = f"\033{colors['process']}Process {os.getpid()}\033[0m : " if multi else ''
+    text = f"\033{colors[color]}{text}\033[0m"
+    print(time + proc + text)

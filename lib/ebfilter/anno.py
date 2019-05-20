@@ -16,8 +16,9 @@ def worker(tumor_bam, pon_dict, region, config, mut_df):
     # ########## PANDAS IMPORT ################
     # mut_pd = pd.read_csv(mutfile, sep=',')
     # generate pileup files and store data in mut_df
-    mut_df = anno2pileup(mut_df, tumor_bam, pon_dict, region, config)
+    mut_df = anno2pileup(mut_df, tumor_bam, pon_dict, region, None, config)
 
+    mut_df.to_csv('output/mut_df.csv', sep='\t', index=False)
     # in_place removal of indel traces and start/end signs in pileup data
     utils.cleanup_df(mut_df, pon_count, config)
 
@@ -36,14 +37,14 @@ def worker(tumor_bam, pon_dict, region, config, mut_df):
     return mut_df.loc[:, ['Chr', 'Start', 'EB_score']]
 
 
-def anno2pileup(mut_df, bam, pon_dict, region, config):
+def anno2pileup(mut_df, bam, pon_dict, region, chrom, config):
     '''
     creates a pileup from all the entries in mut_df (the mutation dataframe) and stores the pileup data in mut_df
     '''
 
     # make region list for use in l_option of mpileup (sets position offset)
 
-    bed_file = utils.make_region_list(mut_df, config)  # in utils --> out_1.region_list.bed
+    bed_file = utils.make_region_list(mut_df, chrom, config)  # in utils --> out_1.region_list.bed
     # determine wether it is bam or pon
     mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q",str(config['Q']), "--ff",config['ff'], "-l", bed_file]
 
@@ -70,7 +71,7 @@ def anno2pileup(mut_df, bam, pon_dict, region, config):
             pon_count = len(pon_dict['df'].index)
             mpileup_cmd += ["-b", pon_dict['list']]   # pileup from pon_list
 
-        utils.show_command(mpileup_cmd, config)
+        utils.show_command(mpileup_cmd, config, multi=True)
         pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
         pileup_string = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
         # the columns needed in the dataframe

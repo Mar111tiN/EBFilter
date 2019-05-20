@@ -52,10 +52,9 @@ def pon2pileup(pon_dict, config, chromosome):
     # mpileup_cmd += ['-o', pileup_file]
     print(f"{dt.now().strftime('%H:%M:%S')} Generating pileup for chromosome {chromosome}..")
 
-    utils.show_command(mpileup_cmd, config)
+    utils.show_command(mpileup_cmd, config, multi=False)
     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
     # !!!!!!!!!! MEMORY ERROR FOR LARGE FILES !!!!!!!!!!!!!!!!!!!!! --> provide more memory or write to file
-
     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
     ###############################################################################
 
@@ -248,69 +247,3 @@ def generate_cache(pon_dict, config):
     #########################################################################################
 
     return f"{dt.now().strftime('%H:%M:%S')}: Generation of AB file finished."
-
-
-def get_EBscore_from_AB(pen, row):
-    '''
-    get the EBscore from cached AB parameters
-    no fitting is needed as parameters are precomputed and stored in row[5:9]
-    '''
-
-    # we only get the snp count_df, using the mut_df 'Alt' as var and adjust for AB_df with column 9
-    count_df = get_count_df_snp(row, row['Alt'].upper(), 10)
-    bb_params = {}
-
-    # feed-in the AB params coming with the row
-    bb_params['p'] = [row['a+'], row['b+']]
-    bb_params['n'] = [row['a-'], row['b-']]
-
-    # get the dataSeries for read0
-    target_df = count_df.loc['read0']
-    p_values = bb_pvalues(bb_params, target_df)
-
-    # ########### FISHER COMBINATION #########################
-    # perform Fisher's combination methods for integrating two p-values of positive and negative strands
-    EB_pvalue = fisher_combination(p_values)
-    EB_score = 0
-    if EB_pvalue < 1e-60:
-        EB_score = 60
-    elif EB_pvalue > 1.0 - 1e-10:
-        EB_score = 0
-    else:
-        EB_score = -round(math.log10(EB_pvalue), 3)
-    return EB_score
-
-
-def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
-    '''
-    takes a shortened annotation file (snps only) and loads the valid AB parameters and gets the EB score for these lines
-    '''
-
-    # ############################# GET THE AB parameters
-    cache_file = os.path.join(config['cache_folder'], f"{chrom}.cache")
-    # the merger columns
-    cols = ['Chr', 'Start', 'Alt']
-    # load the file and set Chr and Start to index for proper setting of multi-index
-    print(f"Loading cache {cache_file}..")
-    AB_df = pd.read_csv(cache_file, sep=',', compression='gzip').set_index(cols[:2])
-    AB_columns = pd.MultiIndex.from_product([acgt, ['+', '-'], ['a', 'b']], names=['var', 'strand', 'param'])
-    # set multi-indexed columns
-    AB_df.columns = AB_columns
-    # stack the var column level for merge with the snp_df
-    AB_df = AB_df.stack('var')
-    # reduce the column index level to 1
-    AB_df.columns = AB_df.columns.droplevel(0)
-    # unset the indices and transfer to columns
-    AB_df = AB_df.reset_index()
-    # rename columns for merge
-    AB_df.columns = cols + ['a+', 'b+', 'a-', 'b-']
-    snpAB_df = pd.merge(snp_df, AB_df, on=cols)
-
-    # set region list file_path
-    region_list = os.path.join(config['cache_folder'], chrom)
-    snpAB_df = anno2pileup(snpAB_df, region_list, tumor_bam, None, None, config)
-    # remove start/end signs
-    utils.cleanup_df(snpAB_df, 0, config)
-    snpAB_df['EB_score'] = snpAB_df.apply(partial(get_EBscore_from_AB, config['fitting_penalty']), axis=1)
-
-    return snpAB_df.loc[:, ['Chr', 'Start', 'EB_score']]

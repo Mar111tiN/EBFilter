@@ -1,11 +1,15 @@
-from .eb import get_count_df_snp
-from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
-from .anno import anno2pileup
-from . import utils
 import pandas as pd
 import numpy as np
 import math
 from functools import partial
+from multiprocessing import Pool
+from datetime import datetime as dt
+
+from .eb import get_count_df_snp
+from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
+from .anno import anno2pileup, worker
+from . import utils
+from .utils import show_output
 
 
 def get_EBscore_from_AB(pen, row):
@@ -14,13 +18,11 @@ def get_EBscore_from_AB(pen, row):
     no fitting is needed as parameters are precomputed and stored in row[5:9]
     '''
 
-    # if row['Chr'] in [str(chrom) for chrom in [3,7,10,15,18,'X']]:
-    #     print(row.name, row['Chr'], row['Start'])
     # we only get the snp count_df, using the mut_df 'Alt' as var and adjust for AB_df with column 9
     count_df = get_count_df_snp(row, row['Alt'].upper(), 10)
     bb_params = {}
     if row['depth0'] == np.nan:
-        print(row.name, 'Exitinb')
+        show_output(f"{row.name} Exiting", color=red)
         return None
 
     # feed-in the AB params coming with the row
@@ -49,11 +51,11 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     takes a shortened annotation file (snps only) and loads the valid AB parameters and gets the EB score for these lines
     '''
 
-    # ############################# GET THE AB parameters
+    # ############################# GET THE AB parameters for one chromosome ##############
     AB_df = utils.get_AB_df(chrom, config)
     # merge the BB params into the snp_df
     snpAB_df = pd.merge(snp_df, AB_df, on=['Chr', 'Start', 'Alt'])
-    snpAB_df = anno2pileup(snpAB_df, tumor_bam, None, None, config)
+    snpAB_df = anno2pileup(snpAB_df, tumor_bam, None, None, chrom, config)
     # remove start/end signs
     utils.cleanup_df(snpAB_df, 0, config)
     snpAB_df.dropna(inplace=True)
@@ -62,13 +64,14 @@ def get_EB_from_cache(snp_df, tumor_bam, config, chrom):
     return snpAB_df.loc[:, ['Chr', 'Start', 'EB_score']]
 
 
-def generate_EBscore(mut_file, config):
-    print(f'Loading annotation file {mut_file}')
+def generate_EBscore(mut_file, tumor_bam, pon_dict, region, config):
+    show_output(f'Loading annotation file {mut_file}')
     # create anno_df, store original other info and get anno_chr list
     anno_df, original_columns, config['anno_chr'] = utils.read_anno_csv(mut_file, config)
     # create small working copy
     mut_df = anno_df[anno_df.columns[:5]].copy()
-    print(f'{len(mut_df.index)} variants detected.')
+    threads = config['threads']
+    show_output(f'{len(mut_df.index)} variants detected.')
     # ############## CACHE MODE ###############
     EB_dfs = []
     insert = ''
@@ -81,7 +84,7 @@ def generate_EBscore(mut_file, config):
         # get the SNPs for the annotation
         snp_df = mut_df.query('not (Ref == "-" or Alt == "-")')
         # get the valid chromosomes
-        print(f'{len(snp_df.index)} SNVs detected - pulling BB parameters from cache and piling up the target bam')
+        show_output(f'{len(snp_df.index)} SNVs detected - pulling BB parameters from cache and piling up the target bam', color='normal')
         cache_chromes = list(set(config['chr']) & set(config['cache_chr']))
         # init multicore
         getEB_pool = Pool(threads)
@@ -114,13 +117,12 @@ def generate_EBscore(mut_file, config):
 
         # gather up the remaining mutations for non_cached computation
         mut_df = pd.concat(remaining_mut_dfs)
-        print(mut_df[:53])
 
         if missing_in_cache_count or chrom_not_in_cache_count:
             insert = f" and {missing_in_cache_count + chrom_not_in_cache_count} SNVs not found in EBcache"
-        print("Cache_mode off")
+        show_output("Cache_mode off")
 
-    print(f"Computing EBscores for {indel_count} indels{insert}.")
+    show_output(f"Computing EBscores for {indel_count} indels{insert}.")
     config['cache_mode'] = False
 
     # if all are snps, mut_df is now empty after caching and would raise error in if clause
@@ -133,9 +135,9 @@ def generate_EBscore(mut_file, config):
 
         # mut_split is the argument pool for anno_pool
         mut_split = np.array_split(mut_df, split_factor)
-        print(f"{dt.now().strftime('%H:%M:%S')} Piling up target and PoN for EBscore computation")
+        show_output("Piling up target and PoN for EBscore computation", color='normal', time=True)
         # run partial function anno_partial with mut_df as remaining argument to iterate over for multiprocessing
-        out_dfs = anno_pool.map(partial(anno.worker, tumor_bam, pon_dict, region, config), mut_split)  # mut_split is the iterable df_pool
+        out_dfs = anno_pool.map(partial(worker, tumor_bam, pon_dict, region, config), mut_split)  # mut_split is the iterable df_pool
         anno_pool.close()
         anno_pool.join()
         # add the anno.worker output to EB_dfs
@@ -148,13 +150,14 @@ def generate_EBscore(mut_file, config):
     final_df = pd.merge(left=anno_df, right=EB_df, how='outer', on=['Chr', 'Start'])
     if original_columns is not None:
         final_df.columns = list(original_columns) + ['EB_score']
+
     output_path = config['output_path']
-    print(f'Writing annotation file {output_path} with EBscores to disc..')
+    show_output(f'Writing annotation file {output_path} with EBscores to disc..')
     final_df.to_csv(output_path, sep='\t', index=False)
 
     # ############### DEBUG #####################################
     if config['debug_mode']:
-        out_file = output_path.replace('eb', "eb_only")
+        out_file = output_path.replace('.', "_EBonly.")
         EB_df.to_csv(out_file, sep=config['sep'], index=False)
     # ############# ##############################################
-    return f"{dt.now().strftime('%H:%M:%S')} EBscore is finished!"
+    return "EBscore is finished!"

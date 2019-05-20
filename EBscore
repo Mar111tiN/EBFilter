@@ -29,7 +29,7 @@ parser.add_argument("-sep", choices=['comma', 'tab'], type=str, default='tab',
 
 # ################################# EB CACHING ###################################################
 
-parser.add_argument("-use_cache", metavar="EB_cache_folder", type=str,
+parser.add_argument("-use_cache", metavar="EB_cache_folder", type=str, default=None,
                     help="optional path to the folder keeping the EBcache files\n A valid cache folder will switch on cache mode")
 
 # ################################# PILEUP PARAMS ############################################
@@ -53,26 +53,7 @@ parser.add_argument('-fit_with', metavar="penalty_term_for_fitting", default='0.
 
 parser.add_argument("--debug", default=False, action='store_true', help="keep intermediate files")
 
-args = parser.parse_args()
 
-# passing config parameters to config for compatibility with snakemake implementation
-config = {}
-config['threads'] = args.t
-config['debug_mode'] = args.debug
-config['sep'] = ',' if args.sep == 'comma' else '\t'
-config['ff'] = args.ff
-config['q'] = args.q
-config['Q'] = args.Q
-config['ff'] = args.ff
-config['fitting_penalty'] = args.fit_with
+args = vars(parser.parse_args())
 
-filter_quals = ''
-for qual in range(33, 33 + args.Q):
-    filter_quals += chr(qual)
-config['filter_quals'] = filter_quals
-
-# transfer the args attributes into dictionary for access by main()
-args_dict = vars(args)
-args_dict['generate_cache'] = False
-
-main(args_dict, config)
+main(args, make_cache=False)
