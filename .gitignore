@@ -12,3 +12,5 @@ build/
 dist/
 **/cache_pileups/
 testdata/testdata_cache/pon/*.bam
+AML_cache/
+AML_Japan/

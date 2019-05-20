@@ -1,0 +1,11 @@
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML013_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML024_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML033_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML047_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML048_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML049_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML058_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML05_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML064_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML07_D.bam
+/fast/users/szyskam_c/work/static/ref/PoN/AML_Japan/AML08_D.bam
