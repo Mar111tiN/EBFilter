@@ -18,7 +18,6 @@ def worker(tumor_bam, pon_dict, region, config, mut_df):
     # generate pileup files and store data in mut_df
     mut_df = anno2pileup(mut_df, tumor_bam, pon_dict, region, None, config)
 
-    mut_df.to_csv('output/mut_df.csv', sep='\t', index=False)
     # in_place removal of indel traces and start/end signs in pileup data
     utils.cleanup_df(mut_df, pon_count, config)
 
