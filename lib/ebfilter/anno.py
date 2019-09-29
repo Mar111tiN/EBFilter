@@ -10,14 +10,16 @@ from .eb import get_EB_score
 
 
 def worker(tumor_bam, pon_dict, region, config, mut_df):
+    '''
+    piles up the reads from tumor bam and Pons for mutations from mut_df and computes EB score witout caching
+    '''
 
     pon_count = len(pon_dict['df'].index)
 
     # ########## PANDAS IMPORT ################
-    # mut_pd = pd.read_csv(mutfile, sep=',')
-    # generate pileup files and store data in mut_df
-    mut_df = anno2pileup(mut_df, tumor_bam, pon_dict, region, None, config)
 
+    mut_df = anno2pileup(mut_df, tumor_bam, pon_dict, region, None, config)
+    # mut_df = pd.read_csv('output/test_D-EB_144012.control.merged.csv', sep='\t')
     # in_place removal of indel traces and start/end signs in pileup data
     utils.cleanup_df(mut_df, pon_count, config)
 
@@ -42,7 +44,6 @@ def anno2pileup(mut_df, bam, pon_dict, region, chrom, config):
     '''
 
     # make region list for use in l_option of mpileup (sets position offset)
-
     bed_file = utils.make_region_list(mut_df, chrom, config)  # in utils --> out_1.region_list.bed
     # determine wether it is bam or pon
     mpileup_cmd = ["samtools", "mpileup", "-B", "-d", "10000000", "-q", str(config['q']), "-Q",str(config['Q']), "--ff",config['ff'], "-l", bed_file]
@@ -79,7 +80,7 @@ def anno2pileup(mut_df, bam, pon_dict, region, chrom, config):
 
         if 'target' in out:
             names += ['depth0', 'read0', 'Q0']
-            pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names=names, dtype={'Chr':str}).drop(columns='Ref')
+            pileup_df = pd.read_csv(pileup_string, sep='\t', header=None, names = names, dtype={'Chr':str}).drop(columns='Ref')
 
         # control pileup
         else:
@@ -95,7 +96,8 @@ def anno2pileup(mut_df, bam, pon_dict, region, chrom, config):
 
         # ############# MERGE DFs ###########################
         mut_df = pd.merge(left=mut_df, right=pileup_df, how='outer', on=['Chr', 'Start'], left_index=True)
-
+    # revert to the original Start positions
+    mut_df['Start'] += (mut_df['Alt'] == '-')
     # ############# FOR DEBUGGING #######################
     if not config['debug_mode']:
         subprocess.check_call(["rm", bed_file])
@@ -103,8 +105,5 @@ def anno2pileup(mut_df, bam, pon_dict, region, chrom, config):
         out_file = bed_file.replace('region_list.bed', f"{out}.merged.csv")
         mut_df.to_csv(out_file, sep='\t', index=False)
     ####################################################
-
-    # revert to the original Start positions
-    mut_df['Start'] += (mut_df['Alt'] == '-')
 
     return mut_df

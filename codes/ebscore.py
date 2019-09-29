@@ -75,7 +75,9 @@ def generate_EBscore(mut_file, tumor_bam, pon_dict, region, config):
     # ############## CACHE MODE ###############
     EB_dfs = []
     insert = ''
-    indel_count = 0
+
+    mut_df_indel = mut_df.query('Ref == "-" or Alt == "-"')
+    indel_count = len(mut_df_indel.index)
 
     if config['cache_mode']:
         # ################ CACHE RETRIEVAL ####################################
@@ -83,46 +85,49 @@ def generate_EBscore(mut_file, tumor_bam, pon_dict, region, config):
 
         # get the SNPs for the annotation
         snp_df = mut_df.query('not (Ref == "-" or Alt == "-")')
-        # get the valid chromosomes
-        show_output(f'{len(snp_df.index)} SNVs detected - pulling BB parameters from cache and piling up the target bam', color='normal')
-        cache_chromes = list(set(config['chr']) & set(config['cache_chr']))
-        # init multicore
-        getEB_pool = Pool(threads)
-        # threads are mapped to the pool of chromosomes
-        # outputs df_tuples of (has_EB, no_EB)
-        EB_dfs += getEB_pool.map(partial(get_EB_from_cache, snp_df, tumor_bam, config), cache_chromes)
-        # EBcached_outputs will be concatenated with the annoworker dfs
-        getEB_pool.close()
-        getEB_pool.join()
+        snp_len = len(snp_df.index)
+        if snp_len:
+            # get the valid chromosomes
+            show_output(f'{snp_len} SNVs detected - pulling BB parameters from cache and piling up the target bam', color='normal')
+            cache_chromes = list(set(config['chr']) & set(config['cache_chr']))
+            # init multicore
+            getEB_pool = Pool(threads)
+            # threads are mapped to the pool of chromosomes
+            # outputs df_tuples of (has_EB, no_EB)
+            EB_dfs += getEB_pool.map(partial(get_EB_from_cache, snp_df, tumor_bam, config), cache_chromes)
+            # EBcached_outputs will be concatenated with the annoworker dfs
+            getEB_pool.close()
+            getEB_pool.join()
 
-    # ################ NOT CACHE MODE // INDELS IN CACHE MODE ###############
-        # reduce mut_df to the remaining indel occurrences and uncached chroms for anno worker
-        mut_df_indel = mut_df.query('Ref == "-" or Alt == "-"')
-        mut_df_chr_no_cache = mut_df.query(f'Chr not in {config["cache_chr"]}')
+        # ################ NOT CACHE MODE // INDELS IN CACHE MODE ###############
+            # reduce mut_df to the remaining indel occurrences and uncached chroms for anno worker
+            mut_df_chr_no_cache = mut_df.query(f'Chr not in {config["cache_chr"]}')
+            chrom_not_in_cache_count = len(mut_df_chr_no_cache.index)
+            # make list of remaining mut_dfs for concat below
+            remaining_mut_dfs = [mut_df_chr_no_cache, mut_df_indel]
 
-        # get lengths for summary
-        indel_count = len(mut_df_indel.index)
-        chrom_not_in_cache_count = len(mut_df_chr_no_cache.index)
-        # make list of remaining mut_dfs for concat below
-        remaining_mut_dfs = [mut_df_chr_no_cache, mut_df_indel]
+            # get the index of SNVs missing in cache (for whatever reason beside missing chromosome)
+            cache_EB_df = pd.concat(EB_dfs)
+            missing_in_cache_index = cache_EB_df.query('EB_score != EB_score').index
+            missing_in_cache_count = len(missing_in_cache_index)
+            if missing_in_cache_count:
+                # generate mut_df of missing SNVs from cache (using index of cache_EB_df with EBscore == NaN) and add to df list 
+                remaining_mut_dfs += mut_df.iloc(missing_in_cache_index)
+                EB_dfs = [cache_EB_df.query('EB_score == EB_score')]
 
-        # get the index of SNVs missing in cache (for whatever reason beside missing chromosome)
-        cache_EB_df = pd.concat(EB_dfs)
-        missing_in_cache_index = cache_EB_df.query('EB_score != EB_score').index
-        missing_in_cache_count = len(missing_in_cache_index)
-        if missing_in_cache_count:
-            # generate mut_df of missing SNVs from cache (using index of cache_EB_df with EBscore == NaN) and add to df list 
-            remaining_mut_dfs += mut_df.iloc(missing_in_cache_index)
-            EB_dfs = [cache_EB_df.query('EB_score == EB_score')]
+            # gather up the remaining mutations for non_cached computation
+            mut_df = pd.concat(remaining_mut_dfs)
 
-        # gather up the remaining mutations for non_cached computation
-        mut_df = pd.concat(remaining_mut_dfs)
-
-        if missing_in_cache_count or chrom_not_in_cache_count:
-            insert = f" and {missing_in_cache_count + chrom_not_in_cache_count} SNVs not found in EBcache"
-        show_output("Cache_mode off")
+            if missing_in_cache_count or chrom_not_in_cache_count:
+                insert = f" and {missing_in_cache_count + chrom_not_in_cache_count} SNVs not found in EBcache"
+            show_output("Cache mode off")
+        else:   # no snps
+            show_output('No SNVs detected. Cache mode off')
 
     show_output(f"Computing EBscores for {indel_count} indels{insert}.")
+
+    # #################### CACHE MODE OFF ###########################################
+    ################################################################################
     config['cache_mode'] = False
 
     # if all are snps, mut_df is now empty after caching and would raise error in if clause

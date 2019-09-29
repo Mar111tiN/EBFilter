@@ -6,12 +6,16 @@ from io import StringIO
 import os
 import pandas as pd
 import numpy as np
-from .anno import anno2pileup
-from . import utils
-from .eb import get_count_df_snp
-from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
 import re
 import math
+
+
+from .anno import anno2pileup
+from . import utils
+from .utils import show_command, show_output
+from .eb import get_count_df_snp
+from .beta_binomial import fit_bb, bb_pvalues, fisher_combination
+
 from datetime import datetime as dt
 
 sign_re = re.compile(r'\^.|\$')
@@ -30,11 +34,11 @@ def pon2pileup(pon_dict, config, chromosome):
     # create a chromosome-bound bam and bai for each bam in the pon_list
     # write the created bams to a dataframe and output as pon_list
     pon_sub_df = pd.DataFrame()
-    print(f"{dt.now().strftime('%H:%M:%S')} Splitting bam files of PoN for chromosome {chromosome}..")
+    show_output(f"Splitting bam files of PoN for chromosome {chromosome}..", time=True)
     pon_sub_df['bam'] = pon_dict['df'].apply(partial(utils.split_bam, chromosome, pon_folder), axis=1)
     # use pon_list_chr?.txt instead of the global pon_list.txt
     pon_sub_list = os.path.join(pon_folder, f"pon_list_{chromosome}.txt")
-    print(f"{dt.now().strftime('%H:%M:%S')} Writing pon list for chromosome {chromosome}..")
+    show_output(f" Writing pon list for chromosome {chromosome}..")
     # write the pon_list_{chr#} to file in output/pon for access by pon2pileup
     pon_sub_df.to_csv(pon_sub_list, header=None, index=False)
 
@@ -50,9 +54,9 @@ def pon2pileup(pon_dict, config, chromosome):
 
     # pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
     # mpileup_cmd += ['-o', pileup_file]
-    print(f"{dt.now().strftime('%H:%M:%S')} Generating pileup for chromosome {chromosome}..")
+    show_output(f"Generating pileup for chromosome {chromosome}..")
 
-    utils.show_command(mpileup_cmd, config, multi=False)
+    show_command(mpileup_cmd, config, multi=False)
     pileup_stream = Popen(mpileup_cmd, stdout=PIPE)
     # !!!!!!!!!! MEMORY ERROR FOR LARGE FILES !!!!!!!!!!!!!!!!!!!!! --> provide more memory or write to file
     pileup_file = StringIO(pileup_stream.communicate()[0].decode('utf-8'))
@@ -65,7 +69,7 @@ def pon2pileup(pon_dict, config, chromosome):
     pileup_df = pd.read_csv(pileup_file, sep='\t', header=None, names=names)
     pileup_len = len(pileup_df.index)
     if pileup_len == 0:
-        print(f"Pileup for chromosome {chromosome} is empty and will be dropped..")
+        show_output(f"Pileup for chromosome {chromosome} is empty and will be dropped..", color='warning')
         return {'file': 'empty', 'chr': chromosome, 'pileup_len': 0}
 
     # ############# CLEANUP PILEUP #######################################
@@ -81,7 +85,7 @@ def pon2pileup(pon_dict, config, chromosome):
 
     # fragment the pileup at this stage using numpy array to only get chunks into memory
     pileup_file = os.path.join(config['pileup_folder'], f"cache_{chromosome}.pileup")
-    print(f"{dt.now().strftime('%H:%M:%S')}: Writing pileup of Chr {chromosome} to file {pileup_file}")
+    show_output(f"Writing pileup of Chr {chromosome} to file {pileup_file}")
     pileup_df.to_csv(pileup_file, sep='\t', index=False)
 
     # ############################ DEBUG ######################################
@@ -134,7 +138,7 @@ def pileup2AB(config, chromosome, chr_len, pileup_df):
     bar_size = 25
     progress_bar = '|' + '.' * math.ceil(frac * bar_size) + ' ' * math.floor(bar_size * (1 - frac)) + '|'
 
-    print(f'Process {os.getpid()}: {pileup_start } lines ({round(frac * 100, 1)}%) of Chr {chromosome}\t{progress_bar}')
+    show_output(f"{pileup_start } lines ({round(frac * 100, 1)}%) of Chr {chromosome}\t{progress_bar}", multi=True)
 
     AB_df[var_columns] = pileup_df.apply(partial(get_AB, config['fitting_penalty']), axis=1)
 
@@ -168,7 +172,7 @@ def generate_cache(pon_dict, config):
         suf = 's'
         if len(config['chr']) == 1:
             suf = ''
-        print(f"{now} Generating Cache for chromosome{suf} {' '.join(config['chr'])}.. ")
+        show_output(f"{now} Generating Cache for chromosome{suf} {' '.join(config['chr'])}.. ", time=True)
     else:
         return "Everything is there. No need for computation."
 
@@ -202,7 +206,7 @@ def generate_cache(pon_dict, config):
         # pileup df is loaded into memory as generator of chunksize 10000 for reducing memory peak
         pileup_dfgen = pd.read_csv(pileup_file_dict['file'], sep='\t', chunksize=10000)
 
-        print(f"{dt.now().strftime('%H:%M:%S')}: Reading {pileup_file_dict['pileup_len']} lines of Chr {pileup_file_dict['chr']} pileup for AB computation")
+        show_output(f"Reading {pileup_file_dict['pileup_len']} lines of Chr {pileup_file_dict['chr']} pileup for AB computation", time=True)
 
         pileup_dict = {'df': pileup_dfgen, 'chr': pileup_file_dict['chr'], 'pileup_len': pileup_file_dict['pileup_len']}
         pileup_dicts.append(pileup_dict)
@@ -226,7 +230,7 @@ def generate_cache(pon_dict, config):
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
         # accomodate for empty pileups (should not be neccessary because of validation)
         if not pileup_dict['pileup_len']:
-            print(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
+            show_output(f"Writing empty cache for Chr {chromosome} to file {chr_cache}.")
             open(chr_cache, 'a').close()
             continue
         chr_len = pileup_dict['pileup_len']  # get length for progress info
@@ -241,9 +245,9 @@ def generate_cache(pon_dict, config):
 
         # ############## OUTPUT ###########################################################
         chr_cache = os.path.join(config['cache_folder'], f"{chromosome}.cache")
-        print(f"{dt.now().strftime('%H:%M:%S')}: Writing ABcache for Chr {chromosome} to file {chr_cache}.")
+        show_output(f"Writing ABcache for Chr {chromosome} to file {chr_cache}.", time=True)
         AB_chr_df.to_csv(chr_cache, sep=',', index=False, compression='gzip')
 
     #########################################################################################
 
-    return f"{dt.now().strftime('%H:%M:%S')}: Generation of AB file finished."
+    return "Generation of AB file finished."

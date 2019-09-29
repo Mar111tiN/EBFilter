@@ -3,6 +3,7 @@ import sys
 import csv
 import re
 import pandas as pd
+import numpy as np
 from functools import partial
 import subprocess
 from subprocess import Popen, PIPE, DEVNULL
@@ -215,7 +216,7 @@ def get_makeEB_config(args, config):
             config['chr'] = valid_chrs
         # if restricted chrom is not in bed file
         else:
-            print(f'Chromosome {config["chr"]} is not in bed file. Nothing to do here.')
+            show_output(f'Chromosome {config["chr"]} is not in bed file. Nothing to do here.', color='warning')
             return
     else:   # no bed_file
         # write empty
@@ -461,8 +462,6 @@ def cleanup_df(mut_df, pon_count, config):
         read = f"read{i}"
         mut_df[read] = mut_df[read].str.replace(sign_re, '')
 
-    is_indel = (mut_df['Ref'] == '-') | (mut_df['Alt'] == '-')
-
     def remove_indels(read, length):
         '''
         removes indel traces in read using indel length argument
@@ -482,14 +481,31 @@ def cleanup_df(mut_df, pon_count, config):
 
     # function to remove indels
     def clean_indels(i, row):
+        '''
+        remove indel traces from reads
+        '''
+
+        if row['read0'] == np.nan:
+            print(row)
+            row['read0'] = "NANANA"
+            return
+
         # search for the indel length in target read
-        m = indel_simple.search(row['read0'])
-        if m:
-            indel_length = m.group(1)
-        else:
+        try:
+            m = indel_simple.search(row['read0']) 
+            if m:
+                indel_length = m.group(1)
+            else:
+                indel_length = 0
+                show_output(f"Warning! No indel detected in read pileup at position {row['Chr']}:{row['Start']}. Please check validity of annotation file!", color='warning')
+        except TypeError as err:
+            show_output(err, color='warning')
+            print(row)
             indel_length = 0
-            show_output(f"Warning! No indel detected in read pileup at position {row['Chr']}:{row['Start']}.\t Please check validity of annotation file!", color='warning')
-            # print('\033[93m' + f"Warning! No indel detected in read pileup at position {row['Chr']}:{row['Start']}.\t Please check validity of annotation file!" + '\033[0m')
+            row['read0'] = ''
+            row['depth0'] = 0
+            row['Q0'] = "?"
+
         # in every column, remove the indel traces
         for i in range(i+1):
             row[f"read{i}"] = remove_indels(row[f"read{i}"], indel_length)
@@ -503,6 +519,8 @@ def cleanup_df(mut_df, pon_count, config):
             length = m.group(1)
             row[f"read{i}"] = remove_indels(row[f"read{i}"], length)
         return row
+
+    is_indel = (mut_df['Ref'] == '-') | (mut_df['Alt'] == '-')
 
     # only clean up other columns if pon pileup is used (non cache_mode)
     if not config['cache_mode']:
@@ -518,6 +536,7 @@ def cleanup_df(mut_df, pon_count, config):
             wrong_rows = mut_df[not_paired]
             if len(wrong_rows.index):
                 mut_df[not_paired] = wrong_rows.apply(partial(clean_this_row, i+1), axis=1)
+
     return mut_df
 
 
@@ -565,7 +584,6 @@ def get_AB_df(chrom, config):
     # the merger columns
     cols = ['Chr', 'Start', 'Alt']
     # load the file and set Chr and Start to index for proper setting of multi-index
-    # print(f"Loading cache {cache_file}..")
     AB_df = pd.read_csv(cache_file, sep=',', compression='gzip', dtype={'Chr': str, 'Start': int}).set_index(cols[:2])
     AB_columns = pd.MultiIndex.from_product([['A', 'C', 'T', 'G'], ['+', '-'], ['a', 'b']], names=['var', 'strand', 'param'])
     # set multi-indexed columns
@@ -590,7 +608,7 @@ def show_command(command_list, config, multi=True):
     '''
 
     if config['debug_mode']:
-        proc = f"\033[92mProcess {os.getpid()}\033[0m : \033[0m" if multi else ''
+        proc = f"\033[92mProcess {os.getpid()}\033[0m : " if multi else ""
         cmd = f"\033[1m$ {' '.join(command_list)}\033[0m"
         print(proc + cmd)
     return
