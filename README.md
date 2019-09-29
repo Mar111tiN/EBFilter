@@ -10,10 +10,12 @@ This fork features:
 + dependencies are found in env/eb-env.yml
 + optimally used in conda environment:
   * `$ conda env create -f env/eb-env.yml -m <your_env_name>`
-+ `$ git clone https://github.com/friend1ws/EBFilter.git`
-+ `$ cd EBFilter`
-+ `$ python setup.py build`
-+ `$ python setup.py install`
+  * `$ conda activate <your_env_name>`
++ install in environment
+  * `$ git clone https://github.com/friend1ws/EBFilter.git`
+  * `$ cd EBFilter`
+  * `$ python setup.py build`
+  * `$ python setup.py install`
   
 ## usage
 + within python code:
