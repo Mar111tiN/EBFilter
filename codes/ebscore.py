@@ -123,8 +123,11 @@ def generate_EBscore(mut_file, tumor_bam, pon_dict, region, config):
             show_output("Cache mode off")
         else:   # no snps
             show_output('No SNVs detected. Cache mode off')
+        show_output(f"Computing EBscores for {indel_count} indels{insert}.")
 
-    show_output(f"Computing EBscores for {indel_count} indels{insert}.")
+    # output if no variant reduction by caching has occurred
+    else:
+    show_output(f"Computing EBscores for {len(mut_df.index)} variants including {indel_count} indels.")
 
     # #################### CACHE MODE OFF ###########################################
     ################################################################################
