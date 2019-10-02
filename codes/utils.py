@@ -124,7 +124,6 @@ def validate_bam(bam_file):
     '''
     file existence for bam files and accompanying bai files
     '''
-
     validate(bam_file, "No control bam file")
     if not os.path.exists(bam_file + ".bai") and not os.path.exists(os.path.splitext(bam_file)[0] + '.bai'):
         sys.stderr.write(f"No index for control bam file: {bam_file}")
@@ -141,6 +140,7 @@ def validate_pon(pon_list, config):
     show_output(f"Validating PoN list {pon_list}..")
     pon_df = pd.read_csv(validate(pon_list, "No PanelOfNormals list file"), header=None)
     pon_df[0].apply(validate_bam)
+    show_output(f"Validating PoN list {pon_list} done!")
     config['pon_chr'] = pon2chr_list(pon_df)
     return {'list': pon_list, 'df': pon_df}
 
@@ -308,7 +308,7 @@ def read_anno_csv(mut_file, config):
     sep = config['sep']
 
     if has_header:
-        show_output(f'Header detected')
+        # show_output(f'Header detected')
         anno_df = pd.read_csv(mut_file, sep=sep, dtype={'Chr':str}, converters={1: to_int, 2: to_int})
         org_columns = anno_df.columns
         check_columns(mut_file, anno_df, config)
@@ -342,10 +342,15 @@ def bam2chr_list(bam_file):
     creates a list of chrom names for the input bam
     '''
 
+    show_output(f"Checking bam file {bam_file}")
     bam_stats_cmd = ['samtools', 'idxstats', bam_file]
     bam_stats = Popen(bam_stats_cmd, stdout=PIPE, stderr=DEVNULL)
     bam_stats_string = StringIO(bam_stats.communicate()[0].decode('utf-8'))
-    stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
+    try:
+        stats_df = pd.read_csv(bam_stats_string, sep='\t', header=None)
+    except:
+        show_output(f"Bam file {bam_file} is probably corrupted - exiting.", color='warning')
+        exit(1)
     non_empty = stats_df[stats_df[2] > 100]
     return [str(chrom) for chrom in list(non_empty[0].T)]
 
