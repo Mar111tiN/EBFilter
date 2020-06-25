@@ -4,7 +4,7 @@ empirical bayesian mutation filtering adopted from Genomon-Project EBFilter.
 This fork features:
 * adaptation to Python 3.7
 * fully vectorized computation relying on pandas dataframes
-* in-memory computation almost entirely forgoing intermediate phyysical files
+* in-memory computation almost entirely forgoing intermediate physical files
 
 ## installation
 + dependencies are found in env/eb-env.yml
